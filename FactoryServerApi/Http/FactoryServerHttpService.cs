@@ -271,7 +271,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
 
     private static void SetupHttpClient(HttpClient hClient, FactoryServerConnectionInfo fInfo)
     {
-        hClient.BaseAddress = fInfo.GetUrl();
+        hClient.BaseAddress = new Uri(fInfo.GetUrl(), "/api/v1/");
         if (fInfo.AuthenticationToken is null)
             return;
         hClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", fInfo.AuthenticationToken);
