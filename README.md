@@ -80,6 +80,6 @@ else if (result.Error is not null)
 
 ```
 
-I made it as a hobby for managing remotely a server with my friends, don't be harsh.
+I'm new in this, and I made it as a hobby for managing remotely a server with my friends, don't be harsh.
 
-Feel free to create issues for bugs and improvements.
+Feel free to create issues for bugs and improvements, or fork.
