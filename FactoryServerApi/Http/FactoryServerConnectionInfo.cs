@@ -9,6 +9,8 @@ public class FactoryServerConnectionInfo
 
     public string? AuthenticationToken { get; set; }
 
+    public FactoryGamePlayerId? PlayerId { get; set; }
+
     public FactoryServerConnectionInfo(string host, int port)
     {
         Port = port;

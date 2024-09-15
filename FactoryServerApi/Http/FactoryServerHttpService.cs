@@ -272,9 +272,12 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
     private static void SetupHttpClient(HttpClient hClient, FactoryServerConnectionInfo fInfo)
     {
         hClient.BaseAddress = fInfo.GetUrl();
-        if (fInfo.AuthenticationToken is null)
-            return;
-        hClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", fInfo.AuthenticationToken);
+
+        if (fInfo.AuthenticationToken is not null)
+            hClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", fInfo.AuthenticationToken);
+
+        if (fInfo.PlayerId is not null)
+            hClient.DefaultRequestHeaders.Add("X-FactoryGame-PlayerId", fInfo.PlayerId.Value.ToString());
     }
 
 }

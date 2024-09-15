@@ -2,13 +2,16 @@
 
 namespace FactoryServerApi.Http;
 
-internal readonly struct FactoryGamePlayerId
+public readonly struct FactoryGamePlayerId
 {
 
     private readonly ReadOnlyMemory<byte> _steamId;
     private readonly string? _epicId;
 
     private readonly byte _platformByte;
+
+    public bool IsSteamId => _platformByte == 6;
+    public bool IsEpicId => _platformByte == 1;
 
     public FactoryGamePlayerId(long steamId64)
     {
@@ -18,9 +21,9 @@ internal readonly struct FactoryGamePlayerId
         _platformByte = 6;
     }
 
-    public FactoryGamePlayerId(string epicIdHex)
+    public FactoryGamePlayerId(string epicIdHexString)
     {
-        _epicId = epicIdHex.StartsWith("0x") ? epicIdHex[2..] : epicIdHex;
+        _epicId = epicIdHexString.StartsWith("0x") ? epicIdHexString[2..] : epicIdHexString;
         _platformByte = 1;
     }
 
