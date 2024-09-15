@@ -1,4 +1,6 @@
-﻿namespace FactoryServerApi.Http;
+﻿using System.Text.Json.Serialization;
+
+namespace FactoryServerApi.Http;
 
 public class SaveHeader
 {
@@ -14,6 +16,7 @@ public class SaveHeader
     public bool IsEditedSave { get; }
     public bool IsCreativeModeEnabled { get; }
 
+    [JsonConstructor]
     internal SaveHeader(
         int saveVersion,
         int buildVersion,

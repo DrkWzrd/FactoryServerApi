@@ -12,8 +12,9 @@ public abstract class FactoryServerContent : HttpContent
     internal static readonly JsonSerializerOptions FactoryServerJsonOptions = new(JsonSerializerDefaults.Web)
     {
 #if DEBUG
-        WriteIndented = true,
+        //WriteIndented = true,
 #endif
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         IncludeFields = true,
     };
 
@@ -22,6 +23,7 @@ public abstract class FactoryServerContent : HttpContent
     protected IFactoryServerContentData? Data { get; init; }
 
     private string? _computedJson;
+    private long _computedLength;
 
     protected FactoryServerContent(string function)
     {
@@ -37,6 +39,7 @@ public abstract class FactoryServerContent : HttpContent
         _computedJson ??= GetJson();
 
         await sWriter.WriteAsync(_computedJson);
+        //Headers.ContentLength = _computedLength;
     }
 
     private string GetJson()
@@ -48,7 +51,9 @@ public abstract class FactoryServerContent : HttpContent
         if (Data is not null)
             content.Add("data", Data.GetJson());
 
-        return JsonSerializer.Serialize(content, FactoryServerJsonOptions);
+        var json = JsonSerializer.Serialize(content, FactoryServerJsonOptions);
+        _computedLength = Encoding.UTF8.GetByteCount(json);
+        return json;
     }
 
     protected override bool TryComputeLength(out long length)
@@ -57,7 +62,7 @@ public abstract class FactoryServerContent : HttpContent
         //return false;
         _computedJson ??= GetJson();
 
-        length = Encoding.UTF8.GetByteCount(_computedJson);
+        length = _computedLength;
         return true;
     }
 }

@@ -21,7 +21,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new HealthCheckContent(clientCustomData);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleResponseAsync<HealthCheckResponseData>(response);
     }
 
@@ -30,7 +30,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new VerifyAuthenticationTokenContent();
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -39,7 +39,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new PasswordlessLoginContent(minimumPrivilegeLevel);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleResponseAsync<LoginResponseData>(response);
     }
 
@@ -48,7 +48,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new PasswordLoginContent(minimumPrivilegeLevel, password);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleResponseAsync<LoginResponseData>(response);
     }
 
@@ -57,7 +57,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new QueryServerStateContent();
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleResponseAsync<QueryServerStateResponseData>(response);
     }
 
@@ -66,7 +66,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new GetServerOptionsContent();
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleResponseAsync<GetServerOptionsResponseData>(response);
     }
 
@@ -75,7 +75,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new GetAdvancedGameSettingsContent();
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleResponseAsync<GetAdvancedGameSettingsResponseData>(response);
     }
 
@@ -84,7 +84,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new ClaimServerContent(serverName, adminPassword);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleResponseAsync<LoginResponseData>(response);
     }
 
@@ -93,7 +93,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new RunCommandContent(command);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleResponseAsync<RunCommandResponseData>(response);
     }
 
@@ -102,7 +102,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new EnumerateSessionsContent();
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleResponseAsync<EnumerateSessionsResponseData>(response);
     }
 
@@ -111,7 +111,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new DownloadSaveGameContent(saveName);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
 
         if (response.IsSuccessStatusCode)
         {
@@ -129,7 +129,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new ApplyAdvancedGameSettingsContent(appliedAdvancedGameSettings);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -138,7 +138,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new RenameServerContent(serverName);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -147,7 +147,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new SetClientPasswordContent(password);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -156,7 +156,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new SetAdminPasswordContent(password, authenticationToken);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -165,7 +165,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new SetAutoLoadSessionNameContent(sessionName);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -174,7 +174,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new ShutdownContent();
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -183,7 +183,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new ApplyServerOptionsContent(updatedServerOptions);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -192,7 +192,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new CreateNewGameContent(newGameData);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -201,7 +201,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new SaveGameContent(saveName);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -210,7 +210,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new DeleteSaveFileContent(saveName);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -219,7 +219,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new DeleteSaveSessionContent(sessionName);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -228,7 +228,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new LoadGameContent(saveName, enableAdvancedGameSettings);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -237,7 +237,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         var content = new UploadSaveGameContent(saveName, loadSaveGame, enableAdvancedGameSettings, saveGameFile);
         var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
         SetupHttpClient(httpClient, connectionInfo);
-        var response = await httpClient.PostAsync("/", content);
+        var response = await httpClient.PostAsync("api/v1/", content);
         return await HandleVoidResponseAsync(response);
     }
 
@@ -271,7 +271,7 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
 
     private static void SetupHttpClient(HttpClient hClient, FactoryServerConnectionInfo fInfo)
     {
-        hClient.BaseAddress = new Uri(fInfo.GetUrl(), "/api/v1/");
+        hClient.BaseAddress = fInfo.GetUrl();
         if (fInfo.AuthenticationToken is null)
             return;
         hClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", fInfo.AuthenticationToken);
