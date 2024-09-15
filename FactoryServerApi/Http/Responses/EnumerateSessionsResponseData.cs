@@ -9,7 +9,7 @@ public class EnumerateSessionsResponseData
 
     [JsonConstructor]
     internal EnumerateSessionsResponseData(
-        List<SessionSaveStruct> sessions,
+        IReadOnlyList<SessionSaveStruct> sessions,
         int currentSessionIndex)
     {
         Sessions = sessions;

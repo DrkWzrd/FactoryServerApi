@@ -54,7 +54,7 @@ public static class IServiceCollectionExtensions
                         return new HttpClientHandler();
                 }
             });
-        host.Services.AddKeyedSingleton("factoryServerSystemTime", TimeProvider.System)
+        host.Services.AddKeyedSingleton("factoryServerLocalSystemTimeProvider", TimeProvider.System)
             .AddSingleton<IFactoryServerUdpClientFactory, FactoryServerUdpClientFactory>()
             .AddTransient<IFactoryServerHttpService, FactoryServerHttpService>();
         return host;

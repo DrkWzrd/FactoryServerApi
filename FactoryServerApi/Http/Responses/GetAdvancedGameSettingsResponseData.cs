@@ -10,7 +10,7 @@ public class GetAdvancedGameSettingsResponseData
     [JsonConstructor]
     internal GetAdvancedGameSettingsResponseData(
         bool creativeModeEnabled,
-        Dictionary<string, string> advancedGameSettings)
+        IReadOnlyDictionary<string, string> advancedGameSettings)
     {
         CreativeModeEnabled = creativeModeEnabled;
         AdvancedGameSettings = advancedGameSettings;

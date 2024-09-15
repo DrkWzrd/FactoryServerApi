@@ -1,5 +1,5 @@
-﻿using System.Net.Http.Json;
-using System.Text.Json;
+﻿using System.Net.Http.Headers;
+using System.Net.Http.Json;
 
 namespace FactoryServerApi.Http.Requests.Contents;
 
@@ -22,11 +22,13 @@ public abstract class FactoryServerMultipartContent : MultipartFormDataContent
         Add(new StringContent("utf-8"), "_charset_");
         if (part is Stream str)
         {
-            Add(new StreamContent(str), partName);
+            var strContent = new StreamContent(str);
+            strContent.Headers.ContentType = MediaTypeHeaderValue.Parse(System.Net.Mime.MediaTypeNames.Application.Octet);
+            Add(strContent, partName);
         }
         else
         {
-            Add(new StringContent(JsonSerializer.Serialize(part, FactoryServerContent.FactoryServerJsonOptions)));
+            Add(JsonContent.Create(part, options: FactoryServerContent.FactoryServerJsonOptions), partName);
         }
 
     }

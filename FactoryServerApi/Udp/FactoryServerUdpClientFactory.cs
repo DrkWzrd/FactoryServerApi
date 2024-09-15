@@ -19,7 +19,7 @@ internal class FactoryServerUdpClientFactory : IFactoryServerUdpClientFactory
 
     public IFactoryServerUdpClient BuildFactoryServerUdpService(IPEndPoint serverEndPoint)
     {
-        return new FactoryServerUdpClient(serverEndPoint, _sProvider.GetRequiredKeyedService<TimeProvider>("factoryServerSystemTime"));
+        return new FactoryServerUdpClient(serverEndPoint, _sProvider.GetRequiredKeyedService<TimeProvider>("factoryServerLocalSystemTimeProvider"));
     }
 
     public async Task<IFactoryServerUdpClient> BuildFactoryServerUdpServiceAsync(string host, int port)

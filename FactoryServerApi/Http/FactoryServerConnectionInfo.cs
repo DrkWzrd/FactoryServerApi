@@ -7,14 +7,17 @@ public class FactoryServerConnectionInfo
 
     public int Port { get; }
 
+    public string? ApiPath { get; }
+
     public string? AuthenticationToken { get; set; }
 
     public FactoryGamePlayerId? PlayerId { get; set; }
 
-    public FactoryServerConnectionInfo(string host, int port)
+    public FactoryServerConnectionInfo(string host, int port, string? apiPath = null)
     {
         Port = port;
         Host = host;
+        ApiPath = apiPath;
     }
 
     public Uri GetUrl()

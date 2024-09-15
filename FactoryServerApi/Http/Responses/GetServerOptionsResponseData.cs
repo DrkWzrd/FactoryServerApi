@@ -9,8 +9,8 @@ public class GetServerOptionsResponseData
 
     [JsonConstructor]
     internal GetServerOptionsResponseData(
-        Dictionary<string, string> serverOptions,
-        Dictionary<string, string> pendingServerOptions)
+        IReadOnlyDictionary<string, string> serverOptions,
+        IReadOnlyDictionary<string, string> pendingServerOptions)
     {
         ServerOptions = serverOptions;
         PendingServerOptions = pendingServerOptions;
