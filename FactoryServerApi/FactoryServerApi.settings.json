@@ -1,0 +1,10 @@
+{
+    "httpConfiguration": {
+        "connectionTimeOut": "00:00:15",
+        "userAgentAppName": "factoryServerApi",
+        "userAgentAppVersion": "0.0.1"
+    },
+    "sslConfiguration": {
+        "serverCertificateValidationStrategy": "noValidation"
+    }
+}
