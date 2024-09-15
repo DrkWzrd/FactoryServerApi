@@ -16,7 +16,7 @@ var app = builder.Build();
 
 var factoryUdpClientFactory = app.Services.GetRequiredService<IFactoryServerUdpClientFactory>();
 
-var factoryUdpClient = await factoryUdpClientFactory.BuildFactoryServerUdpServiceAsync("urlOrIPAddress", 7777);
+var factoryUdpClient = await factoryUdpClientFactory.BuildFactoryServerUdpServiceAsync("urlOrIPAddress", port);
 
 factoryUdpClient.ServerStateReceived += FactoryUdpClient_ServerStateReceived;
 factoryUdpClient.ErrorOccurred += FactoryUdpClient_ErrorOccurred;
@@ -44,7 +44,7 @@ private static void FactoryUdpClient_ErrorOccurred(object? sender, Exception e)
 
 private static void FactoryUdpClient_ServerStateReceived(object? sender, FactoryServerStateResponse e)
 {
-    var json = JsonSerializer.Serialize(e, FactoryServerContent.FactoryServerJsonOptions);
+    var json = JsonSerializer.Serialize(e);
     ...
 
 }
@@ -64,18 +64,18 @@ var app = builder.Build();
 var factoryServer = app.Services.GetRequiredService<IFactoryServerHttpService>();
 
 //Here in connection info you can set the AuthenticationToken provided for the login functions or third party tokens provided by server
-var connectionInfo = new FactoryServerConnectionInfo("https_url", 7777);
+var connectionInfo = new FactoryServerConnectionInfo("https_url", port);
 
 var result = await factoryServer.HealthCheckAsync(null, connectionInfo);
 
 string? json = null;
 if (result.Result is not null)
 {
-    json = JsonSerializer.Serialize(result.Result, FactoryServerContent.FactoryServerJsonOptions);
+    json = JsonSerializer.Serialize(result.Result);
 }
 else if (result.Error is not null)
 {
-    json = JsonSerializer.Serialize(result.Error, FactoryServerContent.FactoryServerJsonOptions);
+    json = JsonSerializer.Serialize(result.Error);
 }
 
 ```
