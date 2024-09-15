@@ -6,6 +6,7 @@ namespace FactoryServerApi.Udp;
 [Flags]
 public enum FactoryServerFlags : ulong
 {
+    None = 0,
     Modded = 1,
     Custom1 = 2,
     Custom2 = 4,

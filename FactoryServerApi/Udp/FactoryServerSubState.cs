@@ -11,10 +11,10 @@ public readonly struct FactoryServerSubState
     {
         var subState = new FactoryServerSubState
         {
-            SubStateId = (FactoryServerSubStateId)data[offset],
-            SubStateVersion = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 8, 2))
+            SubStateId = (FactoryServerSubStateId)data[0],
+            SubStateVersion = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(1, 2))
         };
-        offset += 10;
+        offset += 3;
 
         return subState;
     }
