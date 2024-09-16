@@ -10,7 +10,7 @@ The UDP entry point `IFactoryServerUdpClient`, obtained from a factory `IFactory
 
 ```c#
 var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddFactoryServerServices();
+builder.AddFactoryServerServices();
 
 var app = builder.Build();
 
@@ -57,7 +57,7 @@ The HTTP entry point `IFactoryServerHttpService`, an example of use
 ```c#
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddFactoryServerServices();
+builder.AddFactoryServerServices();
 
 var app = builder.Build();
 
