@@ -1,6 +1,11 @@
 {
+    "Logging": {
+        "LogLevel": {
+            "Default": "Trace"
+        }
+    },
     "httpConfiguration": {
-        "connectionTimeOut": "00:00:15",
+        "connectionTimeOut": "00:00:30",
         "userAgentAppName": "factoryServerApi",
         "userAgentAppVersion": "0.0.1",
         "apiPath": "api/v1/"

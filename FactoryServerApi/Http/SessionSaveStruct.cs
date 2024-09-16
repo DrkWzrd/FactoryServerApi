@@ -10,7 +10,7 @@ public class SessionSaveStruct
     [JsonConstructor]
     internal SessionSaveStruct(
         string sessionName,
-        List<SaveHeader> saveHeaders)
+        IReadOnlyList<SaveHeader> saveHeaders)
     {
         SessionName = sessionName;
         SaveHeaders = saveHeaders;

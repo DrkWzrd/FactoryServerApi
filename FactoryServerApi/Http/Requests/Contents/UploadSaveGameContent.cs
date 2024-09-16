@@ -13,6 +13,7 @@ internal class UploadSaveGameContent : FactoryServerMultipartContent
                     { "EnableAdvancedGameSettings", enableAdvancedGameSettings }
                 }),
             "saveGameFile",
+            saveName,
             saveFileStream)
     {
     }

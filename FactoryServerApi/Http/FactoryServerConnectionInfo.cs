@@ -1,23 +1,9 @@
 ﻿namespace FactoryServerApi.Http;
 
-public class FactoryServerConnectionInfo
+public record FactoryServerConnectionInfo(string Host, int Port, string? ApiPath, string? AuthenticationToken, FactoryGamePlayerId? PlayerId)
 {
-
-    public string Host { get; }
-
-    public int Port { get; }
-
-    public string? ApiPath { get; }
-
-    public string? AuthenticationToken { get; set; }
-
-    public FactoryGamePlayerId? PlayerId { get; set; }
-
-    public FactoryServerConnectionInfo(string host, int port, string? apiPath = null)
+    public FactoryServerConnectionInfo(string host, int port, string? apiPath = null) : this(host, port, apiPath, null, null)
     {
-        Port = port;
-        Host = host;
-        ApiPath = apiPath;
     }
 
     public Uri GetUrl()

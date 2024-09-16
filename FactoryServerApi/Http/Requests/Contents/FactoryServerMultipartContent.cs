@@ -1,5 +1,7 @@
 ﻿using System.Net.Http.Headers;
-using System.Net.Http.Json;
+using System.Net.Mime;
+using System.Text;
+using System.Text.Json;
 
 namespace FactoryServerApi.Http.Requests.Contents;
 
@@ -8,28 +10,27 @@ public abstract class FactoryServerMultipartContent : MultipartFormDataContent
 
     public string Function { get; }
 
-    protected FactoryServerMultipartContent(string function, IFactoryServerContentData data, string partName, object part)
+    protected FactoryServerMultipartContent(string function, IFactoryServerContentData data, string partName, string fileName, object part)
     {
         Function = function;
         Headers.ContentEncoding.Clear();
-        var dictionary = new Dictionary<string, object>()
+        var requestData = new Dictionary<string, object>()
         {
             {"function", Function },
-            {"data", data },
+            {"data", data.GetJson() },
         };
-
-        Add(JsonContent.Create(dictionary, options: FactoryServerContent.FactoryServerJsonOptions), "data");
-        Add(new StringContent("utf-8"), "_charset_");
+        var requestDataContent = new StringContent(JsonSerializer.Serialize(requestData, FactoryServerContent.FactoryServerJsonOptions), Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Json));
+        Add(requestDataContent, "data");
+        Add(new StringContent("utf-8", Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Text.Plain)), "_charset_");
         if (part is Stream str)
         {
             var strContent = new StreamContent(str);
-            strContent.Headers.ContentType = MediaTypeHeaderValue.Parse(System.Net.Mime.MediaTypeNames.Application.Octet);
-            Add(strContent, partName);
+            strContent.Headers.ContentType = MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Octet);
+            Add(strContent, partName, fileName);
         }
         else
         {
-            Add(JsonContent.Create(part, options: FactoryServerContent.FactoryServerJsonOptions), partName);
+            Add(new StringContent(JsonSerializer.Serialize(part, FactoryServerContent.FactoryServerJsonOptions), Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Json)), partName);
         }
-
     }
 }

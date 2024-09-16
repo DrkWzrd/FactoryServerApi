@@ -2,6 +2,7 @@
 using FactoryServerApi.Http.Responses;
 using Microsoft.Extensions.Options;
 using System.Net.Http.Headers;
+using System.Net.Mime;
 using System.Text.Json;
 
 namespace FactoryServerApi.Http;
@@ -12,8 +13,34 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly string _settingsApiPath;
+    private readonly SemaphoreSlim _connectionInfoSemaphore = new(1, 1);
+    private FactoryServerConnectionInfo? _connectionInfo;
 
-    public FactoryServerConnectionInfo? ConnectionInfo { get; set; }
+    public async Task<FactoryServerConnectionInfo?> GetConnectionInfoAsync()
+    {
+        await _connectionInfoSemaphore.WaitAsync();
+        try
+        {
+            return _connectionInfo;
+        }
+        finally
+        {
+            _connectionInfoSemaphore.Release();
+        }
+    }
+
+    public async Task SetConnectionInfoAsync(FactoryServerConnectionInfo? value)
+    {
+        await _connectionInfoSemaphore.WaitAsync();
+        try
+        {
+            _connectionInfo = value;
+        }
+        finally
+        {
+            _connectionInfoSemaphore.Release();
+        }
+    }
 
     public FactoryServerHttpService(IOptions<HttpOptions> options, IHttpClientFactory httpClientFactory)
     {
@@ -172,27 +199,68 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
     private async Task<(TResult? Result, FactoryServerError? Error)> ExecuteRequestAsync<TResult>(HttpContent content, FactoryServerConnectionInfo? connectionInfo = null)
         where TResult : class
     {
-        var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
-        connectionInfo ??= ConnectionInfo ?? throw new InvalidOperationException("The connection info must be set in the service or passed as parameter");
-        SetupHttpClient(httpClient, connectionInfo);
-        var apiPath = connectionInfo.ApiPath ?? _settingsApiPath;
-        var response = await httpClient.PostAsync(apiPath, content);
-        return await HandleResponseAsync<TResult>(response);
+        var innerConnectionInfoUsed = connectionInfo is null;
+        if (innerConnectionInfoUsed)
+            await _connectionInfoSemaphore.WaitAsync();
+
+        connectionInfo ??= _connectionInfo ?? throw new InvalidOperationException("The connection info must be set in the service or passed as parameter");
+
+        try
+        {
+            var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
+            SetupHttpClient(httpClient, connectionInfo);
+            var apiPath = connectionInfo.ApiPath ?? _settingsApiPath;
+            var response = await httpClient.PostAsync(apiPath, content);
+            return await HandleResponseAsync<TResult>(response);
+        }
+        finally
+        {
+            if (innerConnectionInfoUsed)
+                _connectionInfoSemaphore.Release();
+        }
+
     }
 
     private async Task<FactoryServerError?> ExecuteVoidRequestAsync(HttpContent content, FactoryServerConnectionInfo? connectionInfo = null)
     {
-        var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
-        connectionInfo ??= ConnectionInfo ?? throw new InvalidOperationException("The connection info must be set in the service or passed as parameter");
-        SetupHttpClient(httpClient, connectionInfo);
-        var apiPath = connectionInfo.ApiPath ?? _settingsApiPath;
-        var response = await httpClient.PostAsync(apiPath, content);
-        return await HandleVoidResponseAsync(response);
+        var innerConnectionInfoUsed = connectionInfo is null;
+        if (innerConnectionInfoUsed)
+            await _connectionInfoSemaphore.WaitAsync();
+
+        connectionInfo ??= _connectionInfo ?? throw new InvalidOperationException("The connection info must be set in the service or passed as parameter");
+        try
+        {
+            var httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
+            SetupHttpClient(httpClient, connectionInfo);
+            var apiPath = connectionInfo.ApiPath ?? _settingsApiPath;
+            var response = await httpClient.PostAsync(apiPath, content);
+            return await HandleVoidResponseAsync(response);
+
+        }
+        finally
+        {
+            if (innerConnectionInfoUsed)
+                _connectionInfoSemaphore.Release();
+        }
     }
 
     private static async Task<(TResult? Result, FactoryServerError? Error)> HandleResponseAsync<TResult>(HttpResponseMessage response)
         where TResult : class
     {
+        return typeof(TResult) == typeof(Stream)
+            ? await HandleStreamResponseAsync<TResult>(response)
+            : await HandleJsonResponseAsync<TResult>(response);
+    }
+
+    private static async Task<(TResult? Result, FactoryServerError? Error)> HandleJsonResponseAsync<TResult>(HttpResponseMessage response)
+        where TResult : class
+    {
+        if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+            return (null, null);
+
+        if (response.Content.Headers.ContentType?.MediaType != MediaTypeNames.Application.Json)
+            throw new InvalidOperationException();
+
         var responseContent = await response.Content.ReadAsStringAsync();
 
         if (response.IsSuccessStatusCode)
@@ -207,8 +275,35 @@ internal class FactoryServerHttpService : IFactoryServerHttpService
         return (null, error);
     }
 
+    private static async Task<(TResult? Result, FactoryServerError? Error)> HandleStreamResponseAsync<TResult>(HttpResponseMessage response)
+        where TResult : class
+    {
+        if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+            return (null, null);
+
+        if (response.IsSuccessStatusCode)
+        {
+            if (response.Content.Headers.ContentType?.MediaType != MediaTypeNames.Application.Octet)
+                throw new InvalidOperationException();
+
+            var responseContent = await response.Content.ReadAsStreamAsync();
+            if (responseContent is TResult tResult)
+                return (tResult, null);
+
+            throw new InvalidOperationException();
+        }
+        else
+        {
+            return await HandleJsonResponseAsync<TResult>(response);
+        }
+
+    }
+
     private static async Task<FactoryServerError?> HandleVoidResponseAsync(HttpResponseMessage response)
     {
+        if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+            return null;
+
         if (response.IsSuccessStatusCode)
             return null;
 

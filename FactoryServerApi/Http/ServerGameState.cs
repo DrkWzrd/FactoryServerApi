@@ -1,4 +1,6 @@
-﻿namespace FactoryServerApi.Http;
+﻿using System.Text.Json.Serialization;
+
+namespace FactoryServerApi.Http;
 
 public class ServerGameState
 {
@@ -14,6 +16,7 @@ public class ServerGameState
     public float AverageTickRate { get; }
     public string AutoLoadSessionName { get; }
 
+    [JsonConstructor]
     internal ServerGameState(
         string activeSessionName,
         int numConnectedPlayers,

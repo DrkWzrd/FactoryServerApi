@@ -4,6 +4,10 @@ namespace FactoryServerApi.Http;
 
 public interface IFactoryServerHttpService
 {
+    Task<FactoryServerConnectionInfo?> GetConnectionInfoAsync();
+
+    Task SetConnectionInfoAsync(FactoryServerConnectionInfo? value);
+
     Task<(HealthCheckResponseData? Result, FactoryServerError? Error)> HealthCheckAsync(string? clientCustomData, FactoryServerConnectionInfo? connectionInfo = null);
 
     Task<FactoryServerError?> VerifyAuthenticationToken(FactoryServerConnectionInfo? connectionInfo = null);
