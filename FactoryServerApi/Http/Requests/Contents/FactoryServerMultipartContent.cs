@@ -10,14 +10,14 @@ public abstract class FactoryServerMultipartContent : MultipartFormDataContent
 
     public string Function { get; }
 
-    protected FactoryServerMultipartContent(string function, IFactoryServerContentData data, string partName, string fileName, object part)
+    private protected FactoryServerMultipartContent(string function, FactoryServerContentData data, string partName, string fileName, object part)
     {
         Function = function;
         Headers.ContentEncoding.Clear();
         var requestData = new Dictionary<string, object>()
         {
             {"function", Function },
-            {"data", data.GetJson() },
+            {"data", data },
         };
         var requestDataContent = new StringContent(JsonSerializer.Serialize(requestData, FactoryServerContent.FactoryServerJsonOptions), Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Json));
         Add(requestDataContent, "data");

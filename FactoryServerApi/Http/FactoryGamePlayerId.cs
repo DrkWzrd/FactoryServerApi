@@ -5,7 +5,7 @@ namespace FactoryServerApi.Http;
 public readonly struct FactoryGamePlayerId
 {
 
-    private readonly ReadOnlyMemory<byte> _steamId;
+    private readonly string? _steamId;
     private readonly string? _epicId;
 
     private readonly byte _platformByte;
@@ -15,9 +15,9 @@ public readonly struct FactoryGamePlayerId
 
     public FactoryGamePlayerId(long steamId64)
     {
-        var byteSpan = new byte[8];
-        BinaryPrimitives.WriteInt64BigEndian(byteSpan, steamId64);
-        _steamId = byteSpan;
+        Memory<byte> bytes = new byte[8];
+        BinaryPrimitives.WriteInt64BigEndian(bytes.Span, steamId64);
+        _steamId = Convert.ToHexString(bytes.Span);
         _platformByte = 6;
     }
 
@@ -31,7 +31,7 @@ public readonly struct FactoryGamePlayerId
     {
         return _platformByte == 1
             ? $"{_platformByte:X}{_epicId}"
-            : $"{_platformByte:X}{Convert.ToHexString(_steamId.Span)}";
+            : $"{_platformByte:X}{_steamId}";
     }
 
 }

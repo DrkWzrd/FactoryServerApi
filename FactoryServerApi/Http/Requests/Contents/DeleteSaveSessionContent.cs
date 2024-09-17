@@ -4,6 +4,6 @@ internal class DeleteSaveSessionContent : FactoryServerContent
 {
     public DeleteSaveSessionContent(string sessionName) : base("DeleteSaveSession")
     {
-        Data = new SinglePropertyFactoryServerContentData("SessionName", sessionName);
+        Data = new FactoryServerContentData("SessionName", sessionName);
     }
 }

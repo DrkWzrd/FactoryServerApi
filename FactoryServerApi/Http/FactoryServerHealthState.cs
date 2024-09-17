@@ -3,7 +3,7 @@
 namespace FactoryServerApi.Http;
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum HealthState
+public enum FactoryServerHealthState
 {
     Healthy,
     Slow,

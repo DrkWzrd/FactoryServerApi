@@ -9,6 +9,6 @@ internal class LoadGameContent : FactoryServerContent
             { "SaveName", saveName },
             { "EnableAdvancedGameSettings", enableAdvancedGameSettings }
         };
-        Data = new DictionaryFactoryServerContentData(data);
+        Data = new FactoryServerContentData(data);
     }
 }

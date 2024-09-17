@@ -20,7 +20,7 @@ public abstract class FactoryServerContent : HttpContent
 
     public string Function { get; }
 
-    protected IFactoryServerContentData? Data { get; init; }
+    private protected FactoryServerContentData? Data { get; init; }
 
     private string? _computedJson;
     private long _computedLength;
@@ -49,7 +49,7 @@ public abstract class FactoryServerContent : HttpContent
             { "function", Function }
         };
         if (Data is not null)
-            content.Add("data", Data.GetJson());
+            content.Add("data", Data);
 
         var json = JsonSerializer.Serialize(content, FactoryServerJsonOptions);
         _computedLength = Encoding.UTF8.GetByteCount(json);

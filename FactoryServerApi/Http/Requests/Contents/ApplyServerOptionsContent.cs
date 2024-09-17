@@ -4,6 +4,6 @@ internal class ApplyServerOptionsContent : FactoryServerContent
 {
     public ApplyServerOptionsContent(IDictionary<string, string> updatedServerOptions) : base("ApplyServerOptions")
     {
-        Data = new SinglePropertyFactoryServerContentData("UpdatedServerOptions", updatedServerOptions);
+        Data = new FactoryServerContentData("UpdatedServerOptions", updatedServerOptions);
     }
 }

@@ -9,6 +9,7 @@ using System.Reflection;
 
 namespace FactoryServerApi;
 
+
 public static class IServiceCollectionExtensions
 {
 
@@ -56,7 +57,7 @@ public static class IServiceCollectionExtensions
             });
         host.Services.AddKeyedSingleton("factoryServerLocalSystemTimeProvider", TimeProvider.System)
             .AddSingleton<IFactoryServerUdpClientFactory, FactoryServerUdpClientFactory>()
-            .AddTransient<IFactoryServerHttpService, FactoryServerHttpService>();
+            .AddTransient<IFactoryServerApi, FactoryServerHttpService>();
         return host;
     }
 

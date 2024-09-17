@@ -4,6 +4,6 @@ internal class DownloadSaveGameContent : FactoryServerContent
 {
     public DownloadSaveGameContent(string saveName) : base("DownloadSaveGame")
     {
-        Data = new SinglePropertyFactoryServerContentData("SaveName", saveName);
+        Data = new FactoryServerContentData("SaveName", saveName);
     }
 }

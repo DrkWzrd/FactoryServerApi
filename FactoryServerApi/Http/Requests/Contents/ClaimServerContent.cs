@@ -10,7 +10,7 @@ internal class ClaimServerContent : FactoryServerContent
             {"ServerName", serverName },
             {"AdminPassword", adminPassword },
         };
-        Data = new DictionaryFactoryServerContentData(dict);
+        Data = new FactoryServerContentData(dict);
     }
 
 }

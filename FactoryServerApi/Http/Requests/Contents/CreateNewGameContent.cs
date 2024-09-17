@@ -4,6 +4,6 @@ internal class CreateNewGameContent : FactoryServerContent
 {
     public CreateNewGameContent(ServerNewGameData newGameData) : base("CreateNewGame")
     {
-        Data = new SinglePropertyFactoryServerContentData("NewGameData", newGameData);
+        Data = new FactoryServerContentData("NewGameData", newGameData);
     }
 }

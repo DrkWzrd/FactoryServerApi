@@ -4,6 +4,6 @@ internal class DeleteSaveFileContent : FactoryServerContent
 {
     public DeleteSaveFileContent(string saveName) : base("DeleteSaveFile")
     {
-        Data = new SinglePropertyFactoryServerContentData("SaveName", saveName);
+        Data = new FactoryServerContentData("SaveName", saveName);
     }
 }

@@ -5,7 +5,7 @@ internal class RenameServerContent : FactoryServerContent
 
     public RenameServerContent(string serverName) : base("RenameServer")
     {
-        Data = new SinglePropertyFactoryServerContentData("ServerName", serverName);
+        Data = new FactoryServerContentData("ServerName", serverName);
     }
 
 }

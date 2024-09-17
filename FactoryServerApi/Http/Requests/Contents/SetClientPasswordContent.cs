@@ -5,6 +5,6 @@ internal class SetClientPasswordContent : FactoryServerContent
 
     public SetClientPasswordContent(string password) : base("SetClientPassword")
     {
-        Data = new SinglePropertyFactoryServerContentData("Password", password);
+        Data = new FactoryServerContentData("Password", password);
     }
 }

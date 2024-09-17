@@ -6,8 +6,9 @@ public interface IFactoryServerUdpClient
     event EventHandler<FactoryServerStateResponse>? ServerStateReceived;
     event EventHandler<Exception>? ErrorOccurred;
 
-    Task PollServerStateAsync(ulong? cookie = null, CancellationToken cancellationToken = default);
-    Task PollServerStateAsync(TimeSpan duration, TimeSpan delayBetweenPolls, bool repeatPoll = false, int messagesByPoll = 1, Func<ulong>? cookieGenerator = null, CancellationToken cancellationToken = default);
-    Task StartListeningAsync(CancellationToken cancellationToken = default);
+    Task SendPollingMessageAsync(ulong? cookie = null, CancellationToken cancellationToken = default);
+    Task StartServerPollingAsync(TimeSpan duration, TimeSpan delayBetweenPolls, int messagesByPoll = 1, ValueTask<ulong>? cookieGenerator = null, CancellationToken cancellationToken = default);
+    Task StartListeningAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
     Task StopListeningAsync();
+    Task StartServerPollingAsync(TimeSpan delayBetweenPolls, int messagesByPoll = 2, ValueTask<ulong>? cookieGenerator = null, CancellationToken cancellationToken = default);
 }

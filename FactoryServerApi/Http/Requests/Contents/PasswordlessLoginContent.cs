@@ -4,6 +4,6 @@ internal class PasswordlessLoginContent : FactoryServerContent
 {
     public PasswordlessLoginContent(FactoryServerPrivilegeLevel minimumPrivilegeLevel) : base("PasswordlessLogin")
     {
-        Data = new SinglePropertyFactoryServerContentData("MinimumPrivilegeLevel", minimumPrivilegeLevel.ToString());
+        Data = new FactoryServerContentData("MinimumPrivilegeLevel", minimumPrivilegeLevel.ToString());
     }
 }

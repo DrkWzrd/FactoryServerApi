@@ -10,6 +10,6 @@ internal class SetAdminPasswordContent : FactoryServerContent
             {"Password", password },
             {"AuthenticationToken", authenticationToken },
         };
-        Data = new DictionaryFactoryServerContentData(dict);
+        Data = new FactoryServerContentData(dict);
     }
 }

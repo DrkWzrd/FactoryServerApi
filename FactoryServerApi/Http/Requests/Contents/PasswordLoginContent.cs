@@ -9,6 +9,6 @@ internal class PasswordLoginContent : FactoryServerContent
             {"MinimumPrivilegeLevel", minimumPrivilegeLevel },
             {"Password", password }
         };
-        Data = new DictionaryFactoryServerContentData(dict);
+        Data = new FactoryServerContentData(dict);
     }
 }

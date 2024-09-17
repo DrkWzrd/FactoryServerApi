@@ -4,6 +4,6 @@ internal class RunCommandContent : FactoryServerContent
 {
     public RunCommandContent(string command) : base("RunCommand")
     {
-        Data = new SinglePropertyFactoryServerContentData("Command", command);
+        Data = new FactoryServerContentData("Command", command);
     }
 }

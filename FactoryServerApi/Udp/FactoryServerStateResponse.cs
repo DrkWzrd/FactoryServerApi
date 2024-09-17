@@ -3,6 +3,63 @@ using System.Text;
 
 namespace FactoryServerApi.Udp;
 
+//public class FactoryServerSubStates : IReadOnlyList<FactoryServerSubState>, IReadOnlyDictionary<FactoryServerSubStateId, FactoryServerSubState>
+//{
+
+//    private readonly SortedList _dictionary;
+
+//    public FactoryServerSubState this[int index] => (FactoryServerSubState)_dictionary.GetByIndex(index)!;
+
+//    public FactoryServerSubState this[FactoryServerSubStateId key] => (FactoryServerSubState)_dictionary[key]!;
+
+//    public int Count => _dictionary.Count;
+
+//    public IEnumerable<FactoryServerSubStateId> Keys => _dictionary.Keys.Cast<FactoryServerSubStateId>();
+
+//    public IEnumerable<FactoryServerSubState> Values => _dictionary.Values.Cast<FactoryServerSubState>();
+
+//    internal FactoryServerSubStates(int count)
+//    {
+//        _dictionary = new SortedList(count);
+//    }
+
+//    internal void Add(FactoryServerSubState subState)
+//    {
+//        _dictionary.Add(subState.SubStateId, subState);
+//    }
+
+//    public bool ContainsKey(FactoryServerSubStateId key)
+//    {
+//        return _dictionary.ContainsKey(key);
+//    }
+
+//    public IEnumerator<FactoryServerSubState> GetEnumerator()
+//    {
+//        return Values.GetEnumerator();
+//    }
+
+//    public bool TryGetValue(FactoryServerSubStateId key, [MaybeNullWhen(false)] out FactoryServerSubState value)
+//    {
+//        if (_dictionary.ContainsKey(key))
+//        {
+//            value = (FactoryServerSubState)_dictionary[key]!;
+//            return true;
+//        }
+//        value = default;
+//        return false;
+//    }
+
+//    IEnumerator IEnumerable.GetEnumerator()
+//    {
+//        return _dictionary.GetEnumerator();
+//    }
+
+//    IEnumerator<KeyValuePair<FactoryServerSubStateId, FactoryServerSubState>> IEnumerable<KeyValuePair<FactoryServerSubStateId, FactoryServerSubState>>.GetEnumerator()
+//    {
+//        return _dictionary.Cast<KeyValuePair<FactoryServerSubStateId, FactoryServerSubState>>().GetEnumerator();
+//    }
+//}
+
 public class FactoryServerStateResponse
 {
     private readonly List<FactoryServerSubState> _subStates;
@@ -14,16 +71,19 @@ public class FactoryServerStateResponse
     public IReadOnlyList<FactoryServerSubState> SubStates => _subStates;
     public string ServerName { get; private set; }
 
-    private FactoryServerStateResponse(byte numSubStates)
+    public DateTimeOffset ReceivedUtc { get; }
+
+    private FactoryServerStateResponse(byte numSubStates, DateTimeOffset receivedUtc)
     {
         _subStates = new(numSubStates);
         ServerName = string.Empty;
+        ReceivedUtc = receivedUtc;
     }
 
-    public static FactoryServerStateResponse Parse(ReadOnlySpan<byte> data)
+    public static FactoryServerStateResponse Parse(ReadOnlySpan<byte> data, DateTimeOffset receivedUtc)
     {
         var numSubStates = data[21];
-        var response = new FactoryServerStateResponse(numSubStates)
+        var response = new FactoryServerStateResponse(numSubStates, receivedUtc)
         {
             Cookie = BinaryPrimitives.ReadUInt64LittleEndian(data[..8]),
             ServerState = (FactoryServerState)data[8],

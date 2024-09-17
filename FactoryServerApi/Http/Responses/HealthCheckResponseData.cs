@@ -4,11 +4,11 @@ namespace FactoryServerApi.Http.Responses;
 
 public class HealthCheckResponseData
 {
-    public HealthState Health { get; }
+    public FactoryServerHealthState Health { get; }
     public string? ServerCustomData { get; }
 
     [JsonConstructor]
-    internal HealthCheckResponseData(HealthState health, string? serverCustomData)
+    internal HealthCheckResponseData(FactoryServerHealthState health, string? serverCustomData)
     {
         Health = health;
         ServerCustomData = serverCustomData;
