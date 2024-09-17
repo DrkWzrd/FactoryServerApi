@@ -57,8 +57,48 @@ public static class IServiceCollectionExtensions
             });
         host.Services.AddKeyedSingleton("factoryServerLocalSystemTimeProvider", TimeProvider.System)
             .AddSingleton<IFactoryServerUdpClientFactory, FactoryServerUdpClientFactory>()
-            .AddTransient<IFactoryServerApi, FactoryServerHttpService>();
+            .AddTransient<IFactoryServerApi, FactoryServerHttpService>()
+            .AddTransient<IFactoryServerManagerFactory, FactoryServerManagerFactory>();
         return host;
     }
 
+}
+
+public interface IFactoryServerAuthenticationProvider
+{
+
+
+
+}
+
+internal class FactoryServerAuthenticationProvider
+{
+
+}
+
+public interface IFactoryServerManagerFactory
+{
+
+    Task<IFactoryServerManager> BuildAsync(string host, int port);
+}
+
+internal class FactoryServerManagerFactory : IFactoryServerManagerFactory
+{
+    private readonly IServiceProvider _sProv;
+
+    public FactoryServerManagerFactory(IServiceProvider sProv)
+    {
+        _sProv = sProv;
+    }
+
+    public async Task<IFactoryServerManager> BuildAsync(string host, int port)
+    {
+        var udpFactory = _sProv.GetRequiredService<IFactoryServerUdpClientFactory>();
+        var serverApi = _sProv.GetRequiredService<IFactoryServerApi>();
+
+        var udpClient = await udpFactory.BuildFactoryServerUdpServiceAsync(host, port);
+
+        var options = new FactoryServerManagerOptions(host, port, )
+        return new FactoryServerManager(udpClient, serverApi, )
+    }
 }

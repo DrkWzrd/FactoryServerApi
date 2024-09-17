@@ -1,6 +1,7 @@
-﻿using FactoryServerApi.Http.Responses;
+﻿using FactoryServerApi.Http;
+using FactoryServerApi.Http.Responses;
 
-namespace FactoryServerApi.Http;
+namespace FactoryServerApi;
 
 public interface IFactoryServerApi : IFactoryServerHttpService
 {
@@ -22,10 +23,8 @@ public interface IFactoryServerApi : IFactoryServerHttpService
     //You have to be authenticated to use this interface
     //Task<(LoginResponseData? Result, FactoryServerError? Error)> PasswordlessLoginAsync(FactoryServerPrivilegeLevel minimumPrivilegeLevel)
     //    => PasswordlessLoginAsync(minimumPrivilegeLevel, null);
-
     //Task<(LoginResponseData? Result, FactoryServerError? Error)> PasswordLoginAsync(FactoryServerPrivilegeLevel minimumPrivilegeLevel, string password)
     //    => PasswordLoginAsync(minimumPrivilegeLevel, password, null);
-
     //The server must be claimed for use this interface
     //Task<(LoginResponseData? Result, FactoryServerError? Error)> ClaimServerAsync(string serverName, string adminPassword)
     //    => ClaimServerAsync(serverName, adminPassword, null);

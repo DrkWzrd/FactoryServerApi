@@ -5,7 +5,7 @@ using System.Collections.Concurrent;
 
 namespace FactoryServerApi;
 
-public record FactoryServerManagerOptions(string IpAdressOrUrl, int Port, Func<FactoryServerManager, string?> AuthTokenProvider, TimeSpan DelayBetweenPolls, int MessagesPerPingCount = 1, bool QueryOnServerStateChanged = true);
+public record FactoryServerManagerOptions(string IpAdressOrUrl, int Port, Func<FactoryServerManager, string?> AuthTokenProvider, TimeSpan DelayBetweenPolls, int MessagesPerPingCount = 1);
 
 public abstract class FactoryServerManager : IFactoryServerManager
 {
@@ -68,14 +68,15 @@ public abstract class FactoryServerManager : IFactoryServerManager
     {
         if (_currentServerInfo is null)
             throw new InvalidOperationException();
+
         await _currentServerSemaphore.WaitAsync();
         try
         {
             var health = await _httpService.HealthCheckAsync(null);
             if (health.Result is null)
                 throw new InvalidOperationException();
-            _currentServerInfo.UpdateValue(response, health.Result);
 
+            _currentServerInfo.UpdateValue(response, health.Result);
         }
         finally
         {
@@ -157,38 +158,49 @@ public abstract class FactoryServerManager : IFactoryServerManager
 
     private async Task HandleFirstServerResponseAsync(FactoryServerStateResponse e, CancellationToken cancellationToken = default)
     {
-        var httpService = await GetHttpServiceAsync(cancellationToken);
-        var health = await httpService.HealthCheckAsync(null);
-        if (health.Result is null)
-            return;
-        var serverGameState = await httpService.QueryServerStateAsync();
-        if (serverGameState.Result is null)
-            return;
-        var options = await httpService.GetServerOptionsAsync();
-        if (options.Result is null)
-            return;
-        var advancedSettings = await httpService.GetAdvancedGameSettingsAsync();
-        if (advancedSettings.Result is null)
-            return;
-        var sessions = await httpService.EnumerateSessionsAsync();
-        if (sessions.Result is null)
-            return;
+        await _currentServerSemaphore.WaitAsync();
+        try
+        {
+            var health = await _httpService.HealthCheckAsync(null);
+            if (health.Result is null)
+                throw new NotImplementedException();
 
-        _currentServerInfo = new FactoryServerInfo(
-            e.ServerName,
-            //e.Cookie,
-            e.ServerState,
-            e.ServerFlags,
-            e.ServerNetCL,
-            health.Result.Health,
-            health.Result.ServerCustomData,
-            serverGameState.Result.ServerGameState,
-            options.Result.ServerOptions,
-            options.Result.PendingServerOptions,
-            advancedSettings.Result.CreativeModeEnabled,
-            advancedSettings.Result.AdvancedGameSettings,
-            sessions.Result.Sessions,
-            sessions.Result.CurrentSessionIndex);
+            var serverGameState = await _httpService.QueryServerStateAsync();
+            if (serverGameState.Result is null)
+                throw new NotImplementedException();
+
+            var options = await _httpService.GetServerOptionsAsync();
+            if (options.Result is null)
+                throw new NotImplementedException();
+
+            var advancedSettings = await _httpService.GetAdvancedGameSettingsAsync();
+            if (advancedSettings.Result is null)
+                throw new NotImplementedException();
+
+            var sessions = await _httpService.EnumerateSessionsAsync();
+            if (sessions.Result is null)
+                throw new NotImplementedException();
+
+            _currentServerInfo = new FactoryServerInfo(
+                e.ServerName,
+                //e.Cookie,
+                e.ServerState,
+                e.ServerFlags,
+                e.ServerNetCL,
+                health.Result.Health,
+                health.Result.ServerCustomData,
+                serverGameState.Result.ServerGameState,
+                options.Result.ServerOptions,
+                options.Result.PendingServerOptions,
+                advancedSettings.Result.CreativeModeEnabled,
+                advancedSettings.Result.AdvancedGameSettings,
+                sessions.Result.Sessions,
+                sessions.Result.CurrentSessionIndex);
+        }
+        finally
+        {
+            _currentServerSemaphore.Release();
+        }
     }
 
     private async Task ProcessChangedSubStatesQueue(CancellationToken cancellationToken = default)
@@ -196,57 +208,108 @@ public abstract class FactoryServerManager : IFactoryServerManager
         while (!cancellationToken.IsCancellationRequested)
         {
             var serverState = await GetCurrentStateAsync();
-            if (serverState != FactoryServerState.Loading)
+            if (serverState == FactoryServerState.Loading || _statesToQueryQueue.IsEmpty)
             {
-                if (_statesToQueryQueue.TryDequeue(out var subState))
-                    await ProcessChangedSubStateAsync(subState, _statesToQueryUniquenessGuard[subState.SubStateId], cancellationToken);
+                await Task.Delay(1000, cancellationToken);
             }
-            else
-                await Task.Delay(100, cancellationToken);  // Adjust delay as needed
+            else if (_statesToQueryQueue.TryDequeue(out var subState))
+            {
+                await ProcessChangedSubStateAsync(subState, _statesToQueryUniquenessGuard[subState.SubStateId], cancellationToken);
+            }
         }
     }
 
     private async Task ProcessChangedSubStateAsync(FactoryServerSubState subState, ulong cookie, CancellationToken cancellationToken = default)
     {
-        if (subState.SubStateId == FactoryServerSubStateId.ServerGameState)
+        switch (subState.SubStateId)
         {
-            var httpService = await GetHttpServiceAsync(cancellationToken);
-            var serverGameState = await httpService.QueryServerStateAsync();
-            if (serverGameState.Result is not null)
-                UpdateServerInfo(subState, serverGameState.Result, cookie);
-        }
-        else if (subState.SubStateId == FactoryServerSubStateId.ServerOptions)
-        {
-            var httpService = await GetHttpServiceAsync(cancellationToken);
-            var options = await httpService.GetServerOptionsAsync();
-            if (options.Result is not null)
-                UpdateServerInfo(subState, options.Result, cookie);
-        }
-        else if (subState.SubStateId == FactoryServerSubStateId.AdvancedGameSettings)
-        {
-            var httpService = await GetHttpServiceAsync(cancellationToken);
-            var advancedSettings = await httpService.GetAdvancedGameSettingsAsync();
-            if (advancedSettings.Result is not null)
-                UpdateServerInfo(subState, advancedSettings.Result, cookie);
-        }
-        else if (subState.SubStateId == FactoryServerSubStateId.SaveCollection)
-        {
-            var httpService = await GetHttpServiceAsync(cancellationToken);
-            var sessions = await httpService.EnumerateSessionsAsync();
-            if (sessions.Result is not null)
-                UpdateServerInfo(subState, sessions.Result, cookie);
-        }
-        else
-        {
-            if (_currentServerInfo is null)
-                throw new InvalidOperationException();
+            case FactoryServerSubStateId.ServerGameState:
+                await ProcessSubStateAsync(subState, cookie, httpService => httpService.QueryServerStateAsync(), cancellationToken);
+                break;
+            case FactoryServerSubStateId.ServerOptions:
+                await ProcessSubStateAsync(subState, cookie, httpService => httpService.GetServerOptionsAsync(), cancellationToken);
+                break;
+            case FactoryServerSubStateId.AdvancedGameSettings:
+                await ProcessSubStateAsync(subState, cookie, httpService => httpService.GetAdvancedGameSettingsAsync(), cancellationToken);
+                break;
+            case FactoryServerSubStateId.SaveCollection:
+                await ProcessSubStateAsync(subState, cookie, httpService => httpService.EnumerateSessionsAsync(), cancellationToken);
+                break;
+            default:
+                if (_currentServerInfo == null)
+                    throw new InvalidOperationException();
 
-            var gracefullyManaged = await HandleCustomSubStateAsync(_currentServerInfo, subState, cookie, cancellationToken);
-            if (gracefullyManaged)
-                UpdateCacheState(subState);
+                var gracefullyManaged = await HandleCustomSubStateAsync(_currentServerInfo, subState, cookie, cancellationToken);
+                if (gracefullyManaged)
+                    UpdateCacheState(subState);
+                break;
         }
-
     }
+
+    private async Task ProcessSubStateAsync<T>(
+        FactoryServerSubState subState,
+        ulong cookie,
+        Func<IFactoryServerHttpService, Task<(T? Result, FactoryServerError? Error)>> queryFunc,
+        CancellationToken cancellationToken)
+    {
+        var httpService = await GetHttpServiceAsync(cancellationToken);
+        var result = await queryFunc(httpService);
+
+        if (result.Result is null)
+            throw new NotImplementedException();
+
+        UpdateServerInfo(subState, result.Result, cookie);
+    }
+
+    //private async Task ProcessChangedSubStateAsync(FactoryServerSubState subState, ulong cookie, CancellationToken cancellationToken = default)
+    //{
+    //    if (subState.SubStateId == FactoryServerSubStateId.ServerGameState)
+    //    {
+    //        var httpService = await GetHttpServiceAsync(cancellationToken);
+    //        var serverGameState = await httpService.QueryServerStateAsync();
+    //        if (serverGameState.Result is null)
+    //            throw new NotImplementedException();
+
+    //        UpdateServerInfo(subState, serverGameState.Result, cookie);
+    //    }
+    //    else if (subState.SubStateId == FactoryServerSubStateId.ServerOptions)
+    //    {
+    //        var httpService = await GetHttpServiceAsync(cancellationToken);
+    //        var options = await httpService.GetServerOptionsAsync();
+    //        if (options.Result is null)
+    //            throw new NotImplementedException();
+
+    //        UpdateServerInfo(subState, options.Result, cookie);
+    //    }
+    //    else if (subState.SubStateId == FactoryServerSubStateId.AdvancedGameSettings)
+    //    {
+    //        var httpService = await GetHttpServiceAsync(cancellationToken);
+    //        var advancedSettings = await httpService.GetAdvancedGameSettingsAsync();
+    //        if (advancedSettings.Result is null)
+    //            throw new NotImplementedException();
+
+    //        UpdateServerInfo(subState, advancedSettings.Result, cookie);
+    //    }
+    //    else if (subState.SubStateId == FactoryServerSubStateId.SaveCollection)
+    //    {
+    //        var httpService = await GetHttpServiceAsync(cancellationToken);
+    //        var sessions = await httpService.EnumerateSessionsAsync();
+    //        if (sessions.Result is null)
+    //            throw new NotImplementedException();
+
+    //        UpdateServerInfo(subState, sessions.Result, cookie);
+    //    }
+    //    else
+    //    {
+    //        if (_currentServerInfo is null)
+    //            throw new InvalidOperationException();
+
+    //        var gracefullyManaged = await HandleCustomSubStateAsync(_currentServerInfo, subState, cookie, cancellationToken);
+    //        if (gracefullyManaged)
+    //            UpdateCacheState(subState);
+    //    }
+
+    //}
 
     private async Task<IFactoryServerHttpService> GetHttpServiceAsync(CancellationToken token = default)
     {
