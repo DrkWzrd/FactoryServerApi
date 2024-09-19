@@ -364,3 +364,5 @@ FodyWeavers.xsd
 /Example
 /ServerExample/ServerExample.csproj
 /ServerExample/Program.cs
+/Example2/Example2.csproj
+/Example2/Program.cs
