@@ -1,8 +1,8 @@
 {
-    "Logging": {
-        "LogLevel": {
-            "Default": "Trace"
-        }
+    "udpConfiguration": {
+        "delayBetweenPolls": "00:00:10",
+        "messagesPerPoll": 2,
+        "timeoutRetriesBeforeStop": 3
     },
     "httpConfiguration": {
         "connectionTimeOut": "00:00:30",

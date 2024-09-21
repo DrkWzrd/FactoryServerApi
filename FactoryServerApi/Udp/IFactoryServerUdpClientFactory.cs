@@ -5,7 +5,7 @@ namespace FactoryServerApi.Udp;
 public interface IFactoryServerUdpClientFactory
 {
 
-    Task<IFactoryServerUdpClient> BuildFactoryServerUdpServiceAsync(string host, int port);
+    Task<IFactoryServerUdpClient> BuildFactoryServerUdpClientAsync(string host, int port, CancellationToken cancellationToken = default);
 
     IFactoryServerUdpClient BuildFactoryServerUdpService(IPAddress address, int port);
 

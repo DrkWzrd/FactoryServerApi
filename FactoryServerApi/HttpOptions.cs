@@ -1,5 +1,15 @@
 ﻿namespace FactoryServerApi;
 
+public class UdpOptions
+{
+
+    public TimeSpan DelayBetweenPolls { get; init; }
+
+    public int MessagesPerPoll { get; init; }
+
+    public int TimeoutRetriesBeforeStop { get; init; }
+}
+
 public class HttpOptions
 {
     public const string DefaultApiPath = "api/v1/";

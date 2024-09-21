@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using System.Net;
 
 namespace FactoryServerApi.Udp;
@@ -19,15 +20,18 @@ internal class FactoryServerUdpClientFactory : IFactoryServerUdpClientFactory
 
     public IFactoryServerUdpClient BuildFactoryServerUdpService(IPEndPoint serverEndPoint)
     {
-        return new FactoryServerUdpClient(serverEndPoint, _sProvider.GetRequiredKeyedService<TimeProvider>("factoryServerLocalSystemTimeProvider"));
+        var udpOptions = _sProvider.GetRequiredService<IOptions<UdpOptions>>();
+        return new FactoryServerUdpClient(serverEndPoint, _sProvider.GetRequiredKeyedService<TimeProvider>("factoryServerLocalSystemTimeProvider"), udpOptions);
     }
 
-    public async Task<IFactoryServerUdpClient> BuildFactoryServerUdpServiceAsync(string host, int port)
+    public async Task<IFactoryServerUdpClient> BuildFactoryServerUdpClientAsync(string url, int port, CancellationToken cancellationToken = default)
     {
-        if (!IPAddress.TryParse(host, out var ipAddress))
+        var uri = new Uri(url);
+
+        if (!IPAddress.TryParse(uri.Host, out var ipAddress))
         {
-            var hostEntry = await Dns.GetHostEntryAsync(host);
-            ipAddress = hostEntry.AddressList[0];
+            var hostAddresses = await Dns.GetHostAddressesAsync(uri.Host, cancellationToken);
+            ipAddress = hostAddresses[0];
         }
         return BuildFactoryServerUdpService(new IPEndPoint(ipAddress, port));
     }

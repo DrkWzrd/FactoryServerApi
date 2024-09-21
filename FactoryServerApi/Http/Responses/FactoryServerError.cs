@@ -46,15 +46,12 @@ namespace FactoryServerApi.Http.Responses;
 
 public class FactoryServerError
 {
-    public string ErrorCode { get; }
-    public string? ErrorMessage { get; }
-    public object? ErrorData { get; }
+    [JsonPropertyName("errorCode")]
+    public string ErrorCode { get; init; } = string.Empty;
 
-    [JsonConstructor]
-    internal FactoryServerError(string errorCode, string? errorMessage, object? errorData)
-    {
-        ErrorCode = errorCode;
-        ErrorMessage = errorMessage;
-        ErrorData = errorData;
-    }
+    [JsonPropertyName("errorMessage")]
+    public string? ErrorMessage { get; init; }
+
+    [JsonPropertyName("errorData")]
+    public object? ErrorData { get; init; }
 }

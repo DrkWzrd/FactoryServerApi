@@ -9,7 +9,6 @@ using System.Reflection;
 
 namespace FactoryServerApi;
 
-
 public static class IServiceCollectionExtensions
 {
 
@@ -26,6 +25,8 @@ public static class IServiceCollectionExtensions
         host.Configuration.AddJsonFile("FactoryServerApi.settings.json", false);
         host.Services.AddOptions<HttpOptions>().BindConfiguration("httpConfiguration");
         host.Services.AddOptions<SslOptions>().BindConfiguration("sslConfiguration");
+        host.Services.AddOptions<UdpOptions>().BindConfiguration("udpConfiguration");
+
         host.Services.AddHttpClient("factoryServerHttpClient", (sProv, hClient) =>
             {
                 var options = sProv.GetRequiredService<IOptions<HttpOptions>>();
@@ -55,50 +56,16 @@ public static class IServiceCollectionExtensions
                         return new HttpClientHandler();
                 }
             });
+            //.RemoveAllLoggers()
+            //.AddLogger<HttpLogger>(true);
+        //host.Services.AddSingleton<HttpLogger>();
+
         host.Services.AddKeyedSingleton("factoryServerLocalSystemTimeProvider", TimeProvider.System)
             .AddSingleton<IFactoryServerUdpClientFactory, FactoryServerUdpClientFactory>()
-            .AddTransient<IFactoryServerApi, FactoryServerHttpService>()
-            .AddTransient<IFactoryServerManagerFactory, FactoryServerManagerFactory>();
+            .AddSingleton<IFactoryServerHttpClientFactory, FactoryServerHttpClientFactory>()
+            .AddSingleton<IFactoryServerClientFactory, FactoryServerClientFactory>();
+
         return host;
     }
 
-}
-
-public interface IFactoryServerAuthenticationProvider
-{
-
-
-
-}
-
-internal class FactoryServerAuthenticationProvider
-{
-
-}
-
-public interface IFactoryServerManagerFactory
-{
-
-    Task<IFactoryServerManager> BuildAsync(string host, int port);
-}
-
-internal class FactoryServerManagerFactory : IFactoryServerManagerFactory
-{
-    private readonly IServiceProvider _sProv;
-
-    public FactoryServerManagerFactory(IServiceProvider sProv)
-    {
-        _sProv = sProv;
-    }
-
-    public async Task<IFactoryServerManager> BuildAsync(string host, int port)
-    {
-        var udpFactory = _sProv.GetRequiredService<IFactoryServerUdpClientFactory>();
-        var serverApi = _sProv.GetRequiredService<IFactoryServerApi>();
-
-        var udpClient = await udpFactory.BuildFactoryServerUdpServiceAsync(host, port);
-
-        var options = new FactoryServerManagerOptions(host, port, )
-        return new FactoryServerManager(udpClient, serverApi, )
-    }
 }
