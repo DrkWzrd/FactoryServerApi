@@ -10,7 +10,7 @@ internal class PasswordLoginRequestContent : FactoryServerRequestContent
         var dict = new Dictionary<string, object?>()
         {
             {"MinimumPrivilegeLevel", minimumPrivilegeLevel },
-            {"Password", password }
+            {"Password", password.ToString() }
         };
         Data = new FactoryServerRequestContentData(dict);
     }
