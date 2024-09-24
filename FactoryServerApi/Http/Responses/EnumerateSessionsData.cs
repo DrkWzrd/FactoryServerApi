@@ -2,6 +2,8 @@
 
 public class EnumerateSessionsData : FactoryServerResponseContentData
 {
-    public IReadOnlyList<SessionSaveStruct> Sessions { get; init; }
+    public IReadOnlyList<FactorySaveSession> Sessions { get; init; }
+
     public int CurrentSessionIndex { get; init; }
+
 }

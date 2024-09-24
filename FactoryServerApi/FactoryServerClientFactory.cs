@@ -13,13 +13,15 @@ internal class FactoryServerClientFactory : IFactoryServerClientFactory
         _sProv = sProv;
     }
 
-    public async Task<IFactoryServerClient> BuildFactoryServerClientAsync(string host, int port, AuthenticationData? authData = null, CancellationToken cancellationToken = default)
+    public async Task<IFactoryServerClient> BuildFactoryServerClientAsync(string host, int port, string? apiToken = null, CancellationToken cancellationToken = default)
     {
         var udpFactory = _sProv.GetRequiredService<IFactoryServerUdpClientFactory>();
         var httpFactory = _sProv.GetRequiredService<IFactoryServerHttpClientFactory>();
         var udpClient = await udpFactory.BuildFactoryServerUdpClientAsync(host, port, cancellationToken);
-        var httpClient = await httpFactory.BuildFactoryServerHttpClientAsync(host, port, authData, cancellationToken);
-        return new FactoryServerClient(udpClient, httpClient);
+        var httpClient = await httpFactory.BuildFactoryServerHttpClientAsync(host, port, apiToken, cancellationToken);
+        var client = new FactoryServerClient(udpClient, httpClient);
+
+        return client;
     }
 
 }

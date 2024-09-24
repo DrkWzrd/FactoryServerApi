@@ -10,13 +10,12 @@ public class FactoryServerErrorEventArgs : EventArgs
 
     public Exception? Exception { get; }
 
-
-    public FactoryServerErrorEventArgs(Exception ex)
+    internal FactoryServerErrorEventArgs(Exception ex)
     {
         Exception = ex;
     }
 
-    public FactoryServerErrorEventArgs(FactoryServerError error)
+    internal FactoryServerErrorEventArgs(FactoryServerError error)
     {
         Error = error;
     }

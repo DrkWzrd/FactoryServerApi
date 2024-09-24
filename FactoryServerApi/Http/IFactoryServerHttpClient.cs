@@ -4,23 +4,24 @@ namespace FactoryServerApi.Http;
 
 public interface IFactoryServerHttpClient
 {
-    AuthenticationData AuthenticationData { get; }
-
     FactoryGamePlayerId? PlayerId { get; }
+    string? AuthenticationToken { get; }
 
-    bool IsServerClaimed { get; }
+    Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default);
 
-    Task<FactoryServerError?> SetAuthenticationDataAndVerifyAsync(AuthenticationData authData, CancellationToken cancellationToken = default);
+    Task ClearPlayerIdAsync(CancellationToken cancellationToken = default);
 
-    Task SetPlayerIdAsync(FactoryGamePlayerId? playerId, CancellationToken cancellationToken = default);
+    Task SetAuthenticationTokenAsync(string authToken, CancellationToken cancellationToken = default);
+
+    Task ClearAuthenticationTokenAsync(CancellationToken cancellationToken = default);
 
     Task<FactoryServerResponseContent<HealthCheckData>> HealthCheckAsync(string? clientCustomData, CancellationToken cancellationToken = default);
 
+    Task<FactoryServerResponseContent<LoginData>> PasswordlessLoginAsync(FactoryServerPrivilegeLevel minimumPrivilegeLevel, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerResponseContent<LoginData>> PasswordLoginAsync(FactoryServerPrivilegeLevel minimumPrivilegeLevel, ReadOnlyMemory<char> password, CancellationToken cancellationToken = default);
+
     Task<FactoryServerError?> VerifyAuthenticationTokenAsync(CancellationToken cancellationToken = default);
-
-    Task<FactoryServerError?> ClientLoginAsync(ReadOnlyMemory<char>? password, CancellationToken cancellationToken = default);
-
-    Task<FactoryServerError?> AdministratorLoginAsync(ReadOnlyMemory<char> password, CancellationToken cancellationToken= default);
 
     Task<FactoryServerResponseContent<QueryServerStateData>> QueryServerStateAsync(CancellationToken cancellationToken = default);
 

@@ -2,15 +2,18 @@
     "udpConfiguration": {
         "delayBetweenPolls": "00:00:10",
         "messagesPerPoll": 2,
-        "timeoutRetriesBeforeStop": 3
+        "timeoutRetriesBeforeStop": 3,
+        "protocolMagic": 63189,
+        "protocolVersion": 1,
+        "messageTermination": 1
     },
     "httpConfiguration": {
         "connectionTimeOut": "00:00:30",
         "userAgentAppName": "factoryServerApi",
-        "userAgentAppVersion": "0.0.1",
+        "userAgentAppVersion": "0.3",
         "apiPath": "api/v1/"
     },
     "sslConfiguration": {
-        "serverCertificateValidationStrategy": "noValidation"
+        "serverCertificateValidationStrategy": "NoValidation"
     }
 }

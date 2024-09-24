@@ -21,16 +21,18 @@ public abstract class FactoryServerMultipartRequestContent : MultipartFormDataCo
         };
         var requestDataContent = new StringContent(JsonSerializer.Serialize(requestData), Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Json));
         Add(requestDataContent, "data");
-        Add(new StringContent("utf-8", Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Text.Plain)), "_charset_");
+        var explicitCharsetContent = new StringContent(Encoding.UTF8.WebName, Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Text.Plain));
+        Add(explicitCharsetContent, "_charset_");
         if (part is Stream str)
         {
-            var strContent = new StreamContent(str);
-            strContent.Headers.ContentType = MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Octet);
-            Add(strContent, partName, fileName);
+            var fileContent = new StreamContent(str);
+            fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Octet);
+            Add(fileContent, partName, fileName);
         }
         else
         {
-            Add(new StringContent(JsonSerializer.Serialize(part), Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Json)), partName);
+            var additionalContent = new StringContent(JsonSerializer.Serialize(part), Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Json));
+            Add(additionalContent, partName);
         }
     }
 }

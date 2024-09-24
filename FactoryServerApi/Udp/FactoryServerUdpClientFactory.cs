@@ -24,9 +24,9 @@ internal class FactoryServerUdpClientFactory : IFactoryServerUdpClientFactory
         return new FactoryServerUdpClient(serverEndPoint, _sProvider.GetRequiredKeyedService<TimeProvider>("factoryServerLocalSystemTimeProvider"), udpOptions);
     }
 
-    public async Task<IFactoryServerUdpClient> BuildFactoryServerUdpClientAsync(string url, int port, CancellationToken cancellationToken = default)
+    public async Task<IFactoryServerUdpClient> BuildFactoryServerUdpClientAsync(string host, int port, CancellationToken cancellationToken = default)
     {
-        var uri = new Uri(url);
+        var uri = new Uri(host);
 
         if (!IPAddress.TryParse(uri.Host, out var ipAddress))
         {

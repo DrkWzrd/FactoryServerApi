@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using System.Net.Http.Headers;
+using System.Net.Mime;
 using System.Reflection;
 
 namespace FactoryServerApi;
@@ -12,12 +13,9 @@ namespace FactoryServerApi;
 public static class IServiceCollectionExtensions
 {
 
-    private static readonly Func<HttpClientHandler> NoValidationHandlerFunc = () =>
+    private static readonly HttpClientHandler NoValidationHandlerFunc = new()
     {
-        return new HttpClientHandler()
-        {
-            ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
-        };
+        ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
     };
 
     public static IHostApplicationBuilder AddFactoryServerServices(this IHostApplicationBuilder host)
@@ -31,11 +29,15 @@ public static class IServiceCollectionExtensions
             {
                 var options = sProv.GetRequiredService<IOptions<HttpOptions>>();
                 hClient.Timeout = options.Value.ConnectionTimeout;
-                hClient.DefaultRequestHeaders.Accept.Add(MediaTypeWithQualityHeaderValue.Parse("*/*"));
+
+                hClient.DefaultRequestHeaders.Accept.Add(MediaTypeWithQualityHeaderValue.Parse(MediaTypeNames.Application.Json));
+                hClient.DefaultRequestHeaders.Accept.Add(MediaTypeWithQualityHeaderValue.Parse(MediaTypeNames.Application.Octet));
+
                 var pihv = new ProductInfoHeaderValue(options.Value.UserAgentAppName,
                     options.Value.UserAgentAppVersion?.ToString()
                         ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
                         ?? "0.0");
+
                 hClient.DefaultRequestHeaders.UserAgent.Add(pihv);
             })
             .ConfigurePrimaryHttpMessageHandler(sProv =>
@@ -45,7 +47,7 @@ public static class IServiceCollectionExtensions
                 switch (options?.Value.ServerCertificateValidationStrategy ?? null)
                 {
                     case SslValidationStrategy.NoValidation:
-                        return NoValidationHandlerFunc();
+                        return NoValidationHandlerFunc;
                     case SslValidationStrategy.Custom:
                         var certValidationStrategy = sProv.GetRequiredService<IServerCertificateValidationStrategy>();
                         return new HttpClientHandler()
@@ -56,9 +58,6 @@ public static class IServiceCollectionExtensions
                         return new HttpClientHandler();
                 }
             });
-            //.RemoveAllLoggers()
-            //.AddLogger<HttpLogger>(true);
-        //host.Services.AddSingleton<HttpLogger>();
 
         host.Services.AddKeyedSingleton("factoryServerLocalSystemTimeProvider", TimeProvider.System)
             .AddSingleton<IFactoryServerUdpClientFactory, FactoryServerUdpClientFactory>()

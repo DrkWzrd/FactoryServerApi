@@ -2,15 +2,15 @@
 
 namespace FactoryServerApi;
 
-public class SessionSaveStruct
+public class FactorySaveSession
 {
     public string SessionName { get; }
-    public IReadOnlyList<SaveHeader> SaveHeaders { get; }
+    public IReadOnlyList<FactorySaveFile> SaveHeaders { get; }
 
     [JsonConstructor]
-    internal SessionSaveStruct(
+    internal FactorySaveSession(
         string sessionName,
-        IReadOnlyList<SaveHeader> saveHeaders)
+        IReadOnlyList<FactorySaveFile> saveHeaders)
     {
         SessionName = sessionName;
         SaveHeaders = saveHeaders;

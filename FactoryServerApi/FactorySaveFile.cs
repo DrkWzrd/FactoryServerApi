@@ -2,7 +2,7 @@
 
 namespace FactoryServerApi;
 
-public class SaveHeader
+public class FactorySaveFile
 {
     public int SaveVersion { get; }
     public int BuildVersion { get; }
@@ -18,7 +18,7 @@ public class SaveHeader
     public bool IsCreativeModeEnabled { get; }
 
     [JsonConstructor]
-    internal SaveHeader(
+    internal FactorySaveFile(
         int saveVersion,
         int buildVersion,
         string saveName,

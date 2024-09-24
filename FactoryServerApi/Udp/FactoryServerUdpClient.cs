@@ -8,10 +8,6 @@ namespace FactoryServerApi.Udp;
 
 internal class FactoryServerUdpClient : IFactoryServerUdpClient
 {
-    private const ushort ProtocolMagic = 0xF6D5;
-    private const byte ProtocolVersion = 1;
-    private const byte TerminatorByte = 0x1;
-
     private readonly TimeProvider _tProvider;
     private readonly UdpClient _client;
     private readonly IPEndPoint _serverEndPoint;
@@ -102,7 +98,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
         var currentTry = 1;
         while (!cancellationToken.IsCancellationRequested)
         {
-            var timeoutCTS = new CancellationTokenSource(_options.DelayBetweenPolls+TimeSpan.FromSeconds(1));
+            var timeoutCTS = new CancellationTokenSource(_options.DelayBetweenPolls + TimeSpan.FromSeconds(1));
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -111,7 +107,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
                 var receivedUtc = _tProvider.GetUtcNow();
                 Memory<byte> receivedData = result.Buffer;
 
-                if (receivedData.Length < 22 || receivedData.Span[^1] != TerminatorByte)
+                if (receivedData.Length < 22 || receivedData.Span[^1] != _options.MessageTermination)
                 {
                     ErrorOccurred?.Invoke(this, new InvalidDataException("Invalid server udp response"));
                     continue;
@@ -120,10 +116,10 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
                 cancellationToken.ThrowIfCancellationRequested();
 
                 //filter bad responses
-                if (BinaryPrimitives.ReadUInt16LittleEndian(receivedData.Span[..2]) != ProtocolMagic
+                if (BinaryPrimitives.ReadUInt16LittleEndian(receivedData.Span[..2]) != _options.ProtocolMagic
                     || receivedData.Span[2] != (byte)FactoryServerUdpMessageType.ServerStateResponse
-                    || receivedData.Span[3] != ProtocolVersion
-                    || receivedData.Span[^1] != TerminatorByte)
+                    || receivedData.Span[3] != _options.ProtocolVersion
+                    || receivedData.Span[^1] != _options.MessageTermination)
                 {
                     ErrorOccurred?.Invoke(this, new InvalidDataException("Invalid server udp response."));
                     continue;
@@ -142,11 +138,12 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
             {
                 if (currentTry > _options.TimeoutRetriesBeforeStop)
                 {
-                    ErrorOccurred?.Invoke(this, new TimeoutException($"More than {_options.TimeoutRetriesBeforeStop} tries ({(_options.DelayBetweenPolls* currentTry):ss} seconds) without server response."));
+                    ErrorOccurred?.Invoke(this, new TimeoutException($"More than {_options.TimeoutRetriesBeforeStop} tries ({(_options.DelayBetweenPolls * currentTry):ss} seconds) without server response."));
                     break;
                 }
                 currentTry++;
-            }catch(OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
+            }
+            catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
             {
 
             }
@@ -161,15 +158,15 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
     private async Task SendPollingMessageAsync(ulong? cookie = null, CancellationToken cancellationToken = default)
     {
         Memory<byte> message = new byte[5 + 8];
-        BinaryPrimitives.TryWriteUInt16LittleEndian(message.Span, ProtocolMagic);
+        BinaryPrimitives.TryWriteUInt16LittleEndian(message.Span, _options.ProtocolMagic);
         message.Span[2] = (byte)FactoryServerUdpMessageType.PollServerState;
-        message.Span[3] = ProtocolVersion;
+        message.Span[3] = _options.ProtocolVersion;
         if (!cookie.HasValue)
             cookie = (ulong)_tProvider.GetUtcNow().Ticks;
 
         BinaryPrimitives.TryWriteUInt64LittleEndian(message.Span.Slice(4, 8), cookie.Value);
 
-        message.Span[^1] = TerminatorByte;
+        message.Span[^1] = _options.MessageTermination;
 
         try
         {

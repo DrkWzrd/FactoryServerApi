@@ -2,5 +2,5 @@
 
 public interface IFactoryServerHttpClientFactory
 {
-    Task<IFactoryServerHttpClient> BuildFactoryServerHttpClientAsync(string host, int port, AuthenticationData? authData = null, CancellationToken cancellationToken = default);
+    Task<IFactoryServerHttpClient> BuildFactoryServerHttpClientAsync(string host, int port, string? authToken = null, CancellationToken cancellationToken = default);
 }
