@@ -1,18 +1,38 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+    <Import Project="../PushToGitHub.targets" />
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <AssemblyVersion>1.0.207.0</AssemblyVersion>
-        <FileVersion>1.0.207.0</FileVersion>
+        <AssemblyVersion>1.0.215</AssemblyVersion>
+        <FileVersion>1.0.215</FileVersion>
+        <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+        <Version>1.0.215</Version>
     </PropertyGroup>
+    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+      <ShouldCreateLogs>False</ShouldCreateLogs>
+      <AdvancedSettingsExpanded>True</AdvancedSettingsExpanded>
+      <UpdateAssemblyVersion>False</UpdateAssemblyVersion>
+      <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
+      <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
+      <UpdatePackageVersion>True</UpdatePackageVersion>
+      <PackageVersionSettings>AssemblyVersion.Increment.None</PackageVersionSettings>
+      <AssemblyInfoVersionType>SettingsVersion</AssemblyInfoVersionType>
+      <InheritWinAppVersionFrom>None</InheritWinAppVersionFrom>
+    </PropertyGroup>
+    <ItemGroup>
+      <Compile Remove="publish\**" />
+      <EmbeddedResource Remove="publish\**" />
+      <None Remove="publish\**" />
+    </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.8" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
         <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+        <PackageReference Include="System.Text.Json" Version="8.0.4" />
     </ItemGroup>
 
     <ItemGroup>

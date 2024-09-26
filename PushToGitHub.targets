@@ -1,0 +1,8 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <Target Name="PushToGitHub"
+            AfterTargets="Publish"
+            Condition="$(GeneratePackageOnBuild)!=false">
+        <Exec Command="dotnet nuget push $(PublishDir)$(PackageId).$(PackageVersion).nupkg --source github"
+              ContinueOnError="true"/>
+    </Target>
+</Project>
