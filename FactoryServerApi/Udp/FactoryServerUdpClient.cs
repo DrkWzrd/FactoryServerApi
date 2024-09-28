@@ -79,7 +79,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
                     cookie = await cookieGenerator.Value;
 
                 for (int i = 0; i < _options.MessagesPerPoll; i++)
-                    await SendPollingMessageAsync(cookie, cancellationToken);
+                    await ((IFactoryServerUdpClient)this).SendPollingMessageAsync(cookie, cancellationToken);
 
                 await Task.Delay(_options.DelayBetweenPolls, cancellationToken);
             }
@@ -92,6 +92,11 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
         IsRunning = false;
     }
 
+    Task IFactoryServerUdpClient.StartListeningInternalAsync(CancellationToken cancellationToken)
+    {
+        return StartListeningPrivateAsync(cancellationToken);
+    }
+
     private async Task StartListeningPrivateAsync(CancellationToken cancellationToken = default)
     {
         IsListening = true;
@@ -101,38 +106,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
             var timeoutCTS = new CancellationTokenSource(_options.DelayBetweenPolls + TimeSpan.FromSeconds(1));
             try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                UdpReceiveResult result = await _client.ReceiveAsync(timeoutCTS.Token);
-
-                var receivedUtc = _tProvider.GetUtcNow();
-                Memory<byte> receivedData = result.Buffer;
-
-                if (receivedData.Length < 22 || receivedData.Span[^1] != _options.MessageTermination)
-                {
-                    ErrorOccurred?.Invoke(this, new InvalidDataException("Invalid server udp response"));
-                    continue;
-                }
-
-                cancellationToken.ThrowIfCancellationRequested();
-
-                //filter bad responses
-                if (BinaryPrimitives.ReadUInt16LittleEndian(receivedData.Span[..2]) != _options.ProtocolMagic
-                    || receivedData.Span[2] != (byte)FactoryServerUdpMessageType.ServerStateResponse
-                    || receivedData.Span[3] != _options.ProtocolVersion
-                    || receivedData.Span[^1] != _options.MessageTermination)
-                {
-                    ErrorOccurred?.Invoke(this, new InvalidDataException("Invalid server udp response."));
-                    continue;
-                }
-
-                var cookie = BinaryPrimitives.ReadUInt64LittleEndian(receivedData.Span.Slice(4, 8));
-
-                //filter polls we didn't do, weird and maybe impossible, but...
-                if (!_sentCookies.Remove(cookie, out _))
-                    continue;
-
-                var serverStateResponse = FactoryServerStateUdpResponse.Parse(receivedData.Span[4..^1], receivedUtc);
-                ServerStateReceived?.Invoke(this, serverStateResponse);
+                await ReceiveMessagePrivateAsync(timeoutCTS, false, cancellationToken);
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == timeoutCTS.Token)
             {
@@ -155,7 +129,74 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
         IsListening = false;
     }
 
-    private async Task SendPollingMessageAsync(ulong? cookie = null, CancellationToken cancellationToken = default)
+    public Task ReceiveMessageAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        var timeoutCTS = new CancellationTokenSource(timeout + TimeSpan.FromSeconds(1));
+        return ReceiveMessagePrivateAsync(timeoutCTS, true, cancellationToken);
+    }
+
+
+    private async Task ReceiveMessagePrivateAsync(CancellationTokenSource timeoutCTS, bool throwEx, CancellationToken cancellationToken= default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        UdpReceiveResult result = await _client.ReceiveAsync(timeoutCTS.Token);
+
+        var receivedUtc = _tProvider.GetUtcNow();
+        Memory<byte> receivedData = result.Buffer;
+
+        if (receivedData.Length < 22 || receivedData.Span[^1] != _options.MessageTermination)
+        {
+            var ex = new InvalidDataException("Invalid server udp response");
+            if (throwEx)
+                throw ex;
+            ErrorOccurred?.Invoke(this, ex);
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        //filter bad responses
+        if (BinaryPrimitives.ReadUInt16LittleEndian(receivedData.Span[..2]) != _options.ProtocolMagic
+            || receivedData.Span[2] != (byte)FactoryServerUdpMessageType.ServerStateResponse
+            || receivedData.Span[3] != _options.ProtocolVersion
+            || receivedData.Span[^1] != _options.MessageTermination)
+        {
+            var ex = new InvalidDataException("Invalid server udp response");
+            if (throwEx)
+                throw ex;
+            ErrorOccurred?.Invoke(this, ex);
+            return;
+        }
+
+        var cookie = BinaryPrimitives.ReadUInt64LittleEndian(receivedData.Span.Slice(4, 8));
+
+        //filter polls we didn't do, weird and maybe impossible, but...
+        if (!_sentCookies.Remove(cookie, out _))
+        {
+            if (throwEx)
+            {
+                var ex = new InvalidDataException("Cookie not found");
+                throw ex;
+            }
+            return;
+        }
+
+        try
+        {
+            var serverStateResponse = FactoryServerStateUdpResponse.Parse(receivedData.Span[4..^1], receivedUtc);
+            if (!throwEx)
+                ServerStateReceived?.Invoke(this, serverStateResponse);
+        }
+        catch (Exception)
+        {
+            var ex = new InvalidDataException("Invalid server udp response");
+            if (throwEx)
+                throw ex;
+            ErrorOccurred?.Invoke(this, ex);
+        }
+    }
+
+    public async Task SendPollingMessageAsync(ulong? cookie = null, CancellationToken cancellationToken = default)
     {
         Memory<byte> message = new byte[5 + 8];
         BinaryPrimitives.TryWriteUInt16LittleEndian(message.Span, _options.ProtocolMagic);

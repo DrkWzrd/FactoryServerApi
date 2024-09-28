@@ -23,7 +23,7 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
 
     public FactoryServerHttpClient(IHttpClientFactory httpClientFactory, string host, int port, IOptions<HttpOptions> options)
     {
-        _baseAddress = new Uri($"{host}:{port}");
+        _baseAddress = new UriBuilder("https", host, port).Uri;
         _httpClientFactory = httpClientFactory;
         _options = options.Value;
     }

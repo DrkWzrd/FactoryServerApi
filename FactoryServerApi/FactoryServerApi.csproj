@@ -5,10 +5,10 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <AssemblyVersion>1.0.215</AssemblyVersion>
-        <FileVersion>1.0.215</FileVersion>
+        <AssemblyVersion>1.0.226</AssemblyVersion>
+        <FileVersion>1.0.226</FileVersion>
         <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-        <Version>1.0.215</Version>
+        <Version>1.0.219</Version>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
       <ShouldCreateLogs>False</ShouldCreateLogs>

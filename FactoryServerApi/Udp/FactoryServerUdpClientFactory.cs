@@ -26,13 +26,22 @@ internal class FactoryServerUdpClientFactory : IFactoryServerUdpClientFactory
 
     public async Task<IFactoryServerUdpClient> BuildFactoryServerUdpClientAsync(string host, int port, CancellationToken cancellationToken = default)
     {
-        var uri = new Uri(host);
-
-        if (!IPAddress.TryParse(uri.Host, out var ipAddress))
+        var checkHost = Uri.CheckHostName(host);
+        IPAddress? iPAddress = null;
+        if (checkHost == UriHostNameType.IPv4 || checkHost == UriHostNameType.IPv6)
         {
-            var hostAddresses = await Dns.GetHostAddressesAsync(uri.Host, cancellationToken);
-            ipAddress = hostAddresses[0];
+            _ = IPAddress.TryParse(host, out iPAddress);
         }
-        return BuildFactoryServerUdpService(new IPEndPoint(ipAddress, port));
+        else if(checkHost == UriHostNameType.Dns)
+        {
+            var uBuilder = new UriBuilder(null, host);
+            var hostAddresses = await Dns.GetHostAddressesAsync(host, cancellationToken);
+            iPAddress = hostAddresses[0];
+        }
+
+        if (iPAddress is null)
+            throw new ArgumentException("Invalid host");
+
+        return BuildFactoryServerUdpService(new IPEndPoint(iPAddress, port));
     }
 }

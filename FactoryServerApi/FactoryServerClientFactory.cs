@@ -17,9 +17,10 @@ internal class FactoryServerClientFactory : IFactoryServerClientFactory
     {
         var udpFactory = _sProv.GetRequiredService<IFactoryServerUdpClientFactory>();
         var httpFactory = _sProv.GetRequiredService<IFactoryServerHttpClientFactory>();
-        var udpClient = await udpFactory.BuildFactoryServerUdpClientAsync(host, port, cancellationToken);
+        var pollClient = await udpFactory.BuildFactoryServerUdpClientAsync(host, port, cancellationToken);
+        var pingClient = await udpFactory.BuildFactoryServerUdpClientAsync(host, port, cancellationToken);
         var httpClient = await httpFactory.BuildFactoryServerHttpClientAsync(host, port, apiToken, cancellationToken);
-        var client = new FactoryServerClient(udpClient, httpClient);
+        var client = new FactoryServerClient(pollClient, pingClient, httpClient);
 
         return client;
     }

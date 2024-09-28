@@ -2,19 +2,21 @@
 using FactoryServerApi.Http.Responses;
 using FactoryServerApi.Udp;
 using System.Collections.Concurrent;
+using System.Net.Sockets;
 
 namespace FactoryServerApi;
 
 internal class FactoryServerClient : IFactoryServerClient
 {
 
-    private readonly IFactoryServerUdpClient _udpClient;
+    private readonly IFactoryServerUdpClient _pollingUdpClient;
+    private readonly IFactoryServerUdpClient _pingUdpClient;
     private readonly IFactoryServerHttpClient _httpClient;
     private readonly ConcurrentQueue<FactoryServerSubState> _statesToRequestQueue;
     private readonly ConcurrentDictionary<FactoryServerSubStateId, ulong> _subStateIdsQueriesUniquenessGuard;
     private readonly SemaphoreSlim _currentServerStateSemaphore;
     private readonly FactoryServerInfo _serverInfo;
-
+    private ulong _pingUdpCounter;
 
     private readonly Dictionary<FactoryServerSubStateId, ushort> _cachedSubStatesVersions;
 
@@ -25,16 +27,19 @@ internal class FactoryServerClient : IFactoryServerClient
 
     public FactoryServerPrivilegeLevel ClientCurrentPrivilegeLevel => AuthenticationTokenHelper.GetTokenLevel(_httpClient.AuthenticationToken?.AsMemory());
 
-    public FactoryServerClient(IFactoryServerUdpClient udpClient, IFactoryServerHttpClient httpClient)
+    public IFactoryServerHttpClient ApiAccessPoint => _httpClient;
+
+    public FactoryServerClient(IFactoryServerUdpClient pollClient, IFactoryServerUdpClient pingClient, IFactoryServerHttpClient httpClient)
     {
-        _udpClient = udpClient;
+        _pollingUdpClient = pollClient;
+        _pingUdpClient = pingClient;
         _httpClient = httpClient;
         _currentServerStateSemaphore = new(1, 1);
         _statesToRequestQueue = [];
         _subStateIdsQueriesUniquenessGuard = [];
         _cachedSubStatesVersions = [];
-        _udpClient.ServerStateReceived += InternalServerStateHandler;
-        _udpClient.ErrorOccurred += UdpClient_ErrorOccurred;
+        _pollingUdpClient.ServerStateReceived += InternalServerStateHandler;
+        _pollingUdpClient.ErrorOccurred += UdpClient_ErrorOccurred;
         _serverInfo = new();
     }
 
@@ -51,17 +56,37 @@ internal class FactoryServerClient : IFactoryServerClient
         }
     }
 
-    public async Task<bool> GetIsServerOnline(TimeSpan timeout, CancellationToken cancellationToken = default)
+    public async Task<bool> GetIsServerOnlineAsync(TimeSpan timeout, bool checkUdp = true, CancellationToken cancellationToken = default)
     {
-        //await _currentServerStateSemaphore.WaitAsync(cancellationToken);
+        if (checkUdp)
+        {
+            try
+            {
+                var receiveMessageTask = _pingUdpClient.ReceiveMessageAsync(timeout, cancellationToken);
+                await _pingUdpClient.SendPollingMessageAsync(_pingUdpCounter++, cancellationToken);
+                await Task.Delay(200, cancellationToken);
+                await receiveMessageTask;
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+            catch (SocketException)
+            {
+                return false;
+            }
+            catch (InvalidDataException)
+            {
+            }
+        }
+
         var timeoutCTS = new CancellationTokenSource(timeout);
         var mergedCTS = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCTS.Token);
         try
         {
             var healthResponse = await _httpClient.HealthCheckAsync(null, mergedCTS.Token);
             HandleResponseContentErrors(healthResponse);
-            //if (!HandleResponseContentErrors(healthResponse))
-            //    _serverInfo.UpdateValue(healthResponse.Data!);
             return true;
         }
         catch (OperationCanceledException ex) when (ex.CancellationToken == mergedCTS.Token)
@@ -70,7 +95,6 @@ internal class FactoryServerClient : IFactoryServerClient
         }
         finally
         {
-            //_currentServerStateSemaphore.Release();
         }
     }
 
@@ -159,7 +183,7 @@ internal class FactoryServerClient : IFactoryServerClient
         _serverInfo.IsClaimed = claimCheck.IsClaimed;
 
         _ = ProcessChangedSubStatesQueue(cancellationToken);
-        _ = _udpClient.StartPollingAsync(cancellationToken: cancellationToken);
+        _ = _pollingUdpClient.StartPollingAsync(cancellationToken: cancellationToken);
     }
 
     private async Task<(bool IsClaimed, string? InitialAdminAuthToken, FactoryServerError? Error)> CheckIfServerIsClaimed(CancellationToken cancellationToken = default)
@@ -167,7 +191,7 @@ internal class FactoryServerClient : IFactoryServerClient
         var initialAdminTryResponse = await _httpClient.PasswordlessLoginAsync(FactoryServerPrivilegeLevel.InitialAdmin, cancellationToken);
         if (HandleResponseContentErrors(initialAdminTryResponse))
         {
-            return (true, null, initialAdminTryResponse.Error); //If we can't, the server is claimed 
+            return (true, null, initialAdminTryResponse.Error); //If we can't, the server is claimed
         }
         return (false, initialAdminTryResponse.Data!.AuthenticationToken, null);
     }
