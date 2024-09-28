@@ -1,7 +1,7 @@
 ﻿
 namespace FactoryServerApi.Udp;
 
-public interface IFactoryServerUdpClient
+public interface IFactoryServerUdpClient : IDisposable
 {
     event EventHandler<FactoryServerStateUdpResponse>? ServerStateReceived;
     event EventHandler<Exception>? ErrorOccurred;

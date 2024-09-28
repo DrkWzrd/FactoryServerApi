@@ -429,4 +429,12 @@ internal class FactoryServerClient : IFactoryServerClient
             _statesToRequestQueue.Enqueue(handledSubState);
         }
     }
+
+    public void Dispose()
+    {
+        _pollingUdpClient.StopPollingAsync();
+        _pollingUdpClient.Dispose();
+        _pingUdpClient.StopPollingAsync();
+        _pingUdpClient.Dispose();
+    }
 }

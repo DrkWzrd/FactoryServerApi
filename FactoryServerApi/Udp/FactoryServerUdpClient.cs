@@ -219,4 +219,9 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
             ErrorOccurred?.Invoke(this, ex);
         }
     }
+
+    public void Dispose()
+    {
+        _client.Dispose();
+    }
 }

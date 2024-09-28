@@ -4,7 +4,7 @@ using FactoryServerApi.Http;
 
 namespace FactoryServerApi;
 
-public interface IFactoryServerClient
+public interface IFactoryServerClient : IDisposable
 {
     FactoryGamePlayerId? PlayerId { get; }
     FactoryServerPrivilegeLevel ClientCurrentPrivilegeLevel { get; }
