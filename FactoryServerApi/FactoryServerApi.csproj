@@ -8,7 +8,7 @@
         <AssemblyVersion>1.0.227</AssemblyVersion>
         <FileVersion>1.0.227</FileVersion>
         <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-        <Version>1.0.220</Version>
+        <Version>1.0.227</Version>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
       <ShouldCreateLogs>False</ShouldCreateLogs>
