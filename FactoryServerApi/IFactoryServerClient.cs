@@ -18,7 +18,7 @@ public interface IFactoryServerClient : IDisposable
     Task ClearLoginDataAsync(CancellationToken cancellationToken = default);
     Task ClearPlayerIdAsync(CancellationToken cancellationToken = default);
     Task ClientLoginAsync(ReadOnlyMemory<char>? password, CancellationToken cancellationToken = default);
-    Task<FactoryServerInfoSnapshot?> GetCurrentServerStateAsync(CancellationToken cancellationToken = default);
+    Task<FactoryServerInfoSnapshot> GetCurrentServerStateAsync(CancellationToken cancellationToken = default);
     Task<bool> GetIsAuthenticationTokenValidAsync(CancellationToken cancellationToken = default);
     Task<bool> GetIsServerOnlineAsync(TimeSpan timeout, bool checkUdp = true, CancellationToken cancellationToken = default);
     Task SetAuthenticationTokenAsync(string authToken, CancellationToken cancellationToken = default);

@@ -11,7 +11,7 @@ internal class ClaimServerRequestContent : FactoryServerRequestContent
         var dict = new Dictionary<string, object?>()
         {
             {"ServerName", serverName },
-            {"AdminPassword", adminPassword },
+            {"AdminPassword", adminPassword.ToString() },
         };
         Data = new FactoryServerRequestContentData(dict);
     }

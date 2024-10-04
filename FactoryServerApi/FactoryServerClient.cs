@@ -43,7 +43,7 @@ internal class FactoryServerClient : IFactoryServerClient
         _serverInfo = new();
     }
 
-    public async Task<FactoryServerInfoSnapshot?> GetCurrentServerStateAsync(CancellationToken cancellationToken = default)
+    public async Task<FactoryServerInfoSnapshot> GetCurrentServerStateAsync(CancellationToken cancellationToken = default)
     {
         await _currentServerStateSemaphore.WaitAsync(cancellationToken);
         try
