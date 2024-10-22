@@ -32,9 +32,8 @@ internal class FactoryServerUdpClientFactory : IFactoryServerUdpClientFactory
         {
             _ = IPAddress.TryParse(host, out iPAddress);
         }
-        else if(checkHost == UriHostNameType.Dns)
+        else if (checkHost == UriHostNameType.Dns)
         {
-            var uBuilder = new UriBuilder(null, host);
             var hostAddresses = await Dns.GetHostAddressesAsync(host, cancellationToken);
             iPAddress = hostAddresses[0];
         }
