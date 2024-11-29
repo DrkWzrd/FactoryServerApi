@@ -36,9 +36,9 @@ public static class IServiceCollectionExtensions
         }
         """;
 
-    private static readonly HttpClientHandler NoValidationHandlerFunc = new()
+    private static readonly HttpClientHandler NoValidationHandler = new()
     {
-        ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
+        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
     };
 
     public static IHostApplicationBuilder AddFactoryServerServices(this IHostApplicationBuilder host)
@@ -73,7 +73,7 @@ public static class IServiceCollectionExtensions
                 switch (options?.Value.ServerCertificateValidationStrategy ?? null)
                 {
                     case SslValidationStrategy.NoValidation:
-                        return NoValidationHandlerFunc;
+                        return NoValidationHandler;
                     case SslValidationStrategy.Custom:
                         var certValidationStrategy = sProv.GetRequiredService<IServerCertificateValidationStrategy>();
                         return new HttpClientHandler()

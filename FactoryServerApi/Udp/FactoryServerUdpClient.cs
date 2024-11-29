@@ -183,7 +183,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
 
         try
         {
-            var serverStateResponse = FactoryServerStateUdpResponse.Parse(receivedData.Span[4..^1], receivedUtc);
+            var serverStateResponse = FactoryServerStateUdpResponse.Deserialize(receivedData.Span[4..^1], receivedUtc);
             if (!throwEx)
                 ServerStateReceived?.Invoke(this, serverStateResponse);
         }

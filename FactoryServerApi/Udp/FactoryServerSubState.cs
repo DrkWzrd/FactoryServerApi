@@ -7,7 +7,7 @@ public readonly struct FactoryServerSubState
     public FactoryServerSubStateId SubStateId { get; private init; }
     public ushort SubStateVersion { get; private init; }
 
-    public static FactoryServerSubState Parse(ReadOnlySpan<byte> data, ref int offset)
+    public static FactoryServerSubState Deserialize(ReadOnlySpan<byte> data, ref int offset)
     {
         var subState = new FactoryServerSubState
         {

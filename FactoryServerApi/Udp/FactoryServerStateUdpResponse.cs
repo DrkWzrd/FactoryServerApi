@@ -23,7 +23,7 @@ public class FactoryServerStateUdpResponse
         ReceivedUtc = receivedUtc;
     }
 
-    public static FactoryServerStateUdpResponse Parse(ReadOnlySpan<byte> data, DateTimeOffset receivedUtc)
+    public static FactoryServerStateUdpResponse Deserialize(ReadOnlySpan<byte> data, DateTimeOffset receivedUtc)
     {
         var numSubStates = data[21];
         var response = new FactoryServerStateUdpResponse(numSubStates, receivedUtc)
@@ -35,7 +35,7 @@ public class FactoryServerStateUdpResponse
         };
         int offset = 22;
         for (int i = 0; i < numSubStates; i++)
-            response._subStates.Add(FactoryServerSubState.Parse(data[offset..], ref offset));
+            response._subStates.Add(FactoryServerSubState.Deserialize(data[offset..], ref offset));
 
         ushort serverNameLength = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset, 2));
         if (serverNameLength != 0)
