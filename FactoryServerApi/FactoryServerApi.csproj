@@ -5,10 +5,10 @@
         <TargetFramework>net9.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <AssemblyVersion>1.0.237</AssemblyVersion>
-        <FileVersion>1.0.237</FileVersion>
+        <AssemblyVersion>1.0.238</AssemblyVersion>
+        <FileVersion>1.0.238</FileVersion>
         <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-        <Version>1.0.304</Version>
+        <Version>1.0.305</Version>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
       <ShouldCreateLogs>False</ShouldCreateLogs>

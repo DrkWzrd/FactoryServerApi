@@ -3,7 +3,7 @@
 internal class ClaimServerRequestContent : FactoryServerRequestContent
 {
 
-    public ClaimServerRequestContent(string serverName, ReadOnlySpan<char> adminPassword) : base("ClaimServer")
+    public ClaimServerRequestContent(string serverName, ReadOnlyMemory<char> adminPassword) : base("ClaimServer")
     {
         if (adminPassword.IsEmpty)
             throw new InvalidOperationException();
