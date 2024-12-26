@@ -186,14 +186,14 @@ internal class FactoryServerClient : IFactoryServerClient
         _ = _pollingUdpClient.StartPollingAsync(cancellationToken: cancellationToken);
     }
 
-    private async Task<(bool IsClaimed, string? InitialAdminAuthToken, FactoryServerError? Error)> CheckIfServerIsClaimed(CancellationToken cancellationToken = default)
+    private async Task<ClaimCheck> CheckIfServerIsClaimed(CancellationToken cancellationToken = default)
     {
         var initialAdminTryResponse = await _httpClient.PasswordlessLoginAsync(FactoryServerPrivilegeLevel.InitialAdmin, cancellationToken);
         if (HandleResponseContentErrors(initialAdminTryResponse))
         {
-            return (true, null, initialAdminTryResponse.Error); //If we can't, the server is claimed
+            return new(true, null, initialAdminTryResponse.Error); //If we can't, the server is claimed
         }
-        return (false, initialAdminTryResponse.Data!.AuthenticationToken, null);
+        return new(false, initialAdminTryResponse.Data!.AuthenticationToken, null);
     }
 
     private void UdpClient_ErrorOccurred(object? sender, Exception e)
