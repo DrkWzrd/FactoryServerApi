@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <Import Project="../PushToGitHub.targets" />
+
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
@@ -10,17 +11,21 @@
         <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
         <Version>1.0.305</Version>
     </PropertyGroup>
+
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-      <ShouldCreateLogs>False</ShouldCreateLogs>
-      <AdvancedSettingsExpanded>True</AdvancedSettingsExpanded>
-      <UpdateAssemblyVersion>False</UpdateAssemblyVersion>
-      <UpdateAssemblyFileVersion>False</UpdateAssemblyFileVersion>
-      <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
-      <UpdatePackageVersion>True</UpdatePackageVersion>
-      <PackageVersionSettings>AssemblyVersion.Increment.None</PackageVersionSettings>
-      <AssemblyInfoVersionType>SettingsVersion</AssemblyInfoVersionType>
-      <InheritWinAppVersionFrom>None</InheritWinAppVersionFrom>
+        <ShouldCreateLogs>False</ShouldCreateLogs>
+        <AdvancedSettingsExpanded>True</AdvancedSettingsExpanded>
+        <UpdateAssemblyVersion>True</UpdateAssemblyVersion>
+        <UpdateAssemblyFileVersion>True</UpdateAssemblyFileVersion>
+        <UpdateAssemblyInfoVersion>False</UpdateAssemblyInfoVersion>
+        <UpdatePackageVersion>True</UpdatePackageVersion>
+        <AssemblyInfoVersionType>SettingsVersion</AssemblyInfoVersionType>
+        <InheritWinAppVersionFrom>None</InheritWinAppVersionFrom>
+        <PackageVersionSettings>AssemblyVersion.IncrementWithAutoReset.None</PackageVersionSettings>
+        <AssemblyVersionSettings>IncrementOnDemandWithResetOnIncrease.IncrementOnDemandWithResetOnIncrease.IncrementWithResetOnIncrease.None</AssemblyVersionSettings>
+        <AssemblyFileVersionSettings>IncrementOnDemandWithResetOnIncrease.IncrementOnDemandWithResetOnIncrease.IncrementWithResetOnIncrease.None</AssemblyFileVersionSettings>
     </PropertyGroup>
+
     <ItemGroup>
       <Compile Remove="publish\**" />
       <EmbeddedResource Remove="publish\**" />

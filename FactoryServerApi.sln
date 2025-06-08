@@ -6,7 +6,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FactoryServerApi", "Factory
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Example", "Example\Example.csproj", "{2499095B-9666-45AC-B187-35CC7EF97F3F}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Elementos de la soluci?n", "Elementos de la soluci?n", "{14ED5517-324F-4BA1-8E04-A2A168211280}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Elementos de la solucion", "Elementos de la solucion", "{14ED5517-324F-4BA1-8E04-A2A168211280}"
 	ProjectSection(SolutionItems) = preProject
 		PushToGitHub.targets = PushToGitHub.targets
 	EndProjectSection
