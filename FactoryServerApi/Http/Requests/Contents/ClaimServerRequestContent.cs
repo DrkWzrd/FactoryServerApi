@@ -8,7 +8,7 @@ internal class ClaimServerRequestContent : FactoryServerRequestContent
         if (adminPassword.IsEmpty)
             throw new InvalidOperationException();
 
-        var dict = new Dictionary<string, object?>()
+        var dict = new Dictionary<string, object>()
         {
             {"ServerName", serverName },
             {"AdminPassword", adminPassword.ToString() },

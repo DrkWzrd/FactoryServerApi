@@ -4,29 +4,29 @@ using System.Text.Json.Serialization;
 namespace FactoryServerApi.Http.Requests.Contents;
 
 [JsonConverter(typeof(FactoryServerContentDataConverter))]
-internal class FactoryServerRequestContentData
+internal sealed class FactoryServerRequestContentData
 {
 
-    private readonly IReadOnlyDictionary<string, object?> _data;
+    private readonly IReadOnlyDictionary<string, object> _data;
 
-    public FactoryServerRequestContentData(IReadOnlyDictionary<string, object?> data)
+    public FactoryServerRequestContentData(IReadOnlyDictionary<string, object> data)
     {
         _data = data;
     }
 
     public FactoryServerRequestContentData(string propertyName, object? data)
     {
-        _data = new Dictionary<string, object?>()
+        _data = new Dictionary<string, object>()
         {
             {propertyName, data ?? string.Empty },
         };
     }
 
-    internal class FactoryServerContentDataConverter : JsonConverter<FactoryServerRequestContentData>
+    sealed class FactoryServerContentDataConverter : JsonConverter<FactoryServerRequestContentData>
     {
         public override FactoryServerRequestContentData? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var dict = JsonSerializer.Deserialize<Dictionary<string, object?>>(ref reader, options);
+            var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(ref reader, options);
             return dict is null
                 ? null :
                 new FactoryServerRequestContentData(dict);

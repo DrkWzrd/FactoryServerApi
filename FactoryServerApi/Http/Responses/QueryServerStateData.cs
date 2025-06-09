@@ -2,5 +2,10 @@
 
 public class QueryServerStateData : FactoryServerResponseContentData
 {
-    public ServerGameState ServerGameState { get; init; }
+    public ServerGameState ServerGameState { get; }
+
+    public QueryServerStateData(ServerGameState serverGameState)
+    {
+        ServerGameState = serverGameState;
+    }
 }

@@ -5,7 +5,6 @@ namespace FactoryServerApi;
 
 internal class FactoryServerInfo
 {
-
     public bool? IsClaimed { get; set; }
 
 
@@ -43,7 +42,7 @@ internal class FactoryServerInfo
 
     public Dictionary<string, object?> CustomStatesData { get; private set; } = [];
 
-    internal FactoryServerInfo() { }
+    public FactoryServerInfo() { }
 
     public void UpdateValue(FactoryServerStateUdpResponse serverStateResponse)
     {
@@ -78,7 +77,7 @@ internal class FactoryServerInfo
 
     public void UpdateValue(EnumerateSessionsData sessions)
     {
-        Sessions = new(sessions.Sessions);
+        Sessions = [.. sessions.Sessions];
         CurrentSessionIndex = sessions.CurrentSessionIndex;
     }
 

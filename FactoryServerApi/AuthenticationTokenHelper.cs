@@ -1,4 +1,5 @@
 ﻿using System.Buffers;
+using System.Buffers.Text;
 using System.Text.Json;
 
 namespace FactoryServerApi;
@@ -14,18 +15,29 @@ public static class AuthenticationTokenHelper
 
         var tokenPayloadBase64 = authenticationToken.Value.Span[..splitPoint];
 
-        Span<byte> tokenPayloadBytes = ArrayPool<byte>.Shared.Rent(tokenPayloadBase64.Length * 2);
+        byte[] tokenPayloadBytesRaw = ArrayPool<byte>.Shared.Rent(tokenPayloadBase64.Length * 2);
 
-        if (!Convert.TryFromBase64Chars(tokenPayloadBase64, tokenPayloadBytes, out var bytesLength))
-            throw new InvalidDataException("Token payload was invalid.");
+        Span<byte> tokenPayloadBytes = tokenPayloadBytesRaw.AsSpan(0, tokenPayloadBase64.Length * 2);
 
-        tokenPayloadBytes = tokenPayloadBytes[..bytesLength];
+        try
+        {
 
-        var payloadReader = new Utf8JsonReader(tokenPayloadBytes);
+            if (!Convert.TryFromBase64Chars(tokenPayloadBase64, tokenPayloadBytes, out var bytesLength))
+                throw new InvalidDataException("Token payload was invalid.");
 
-        var payload = JsonSerializer.Deserialize<AuthenticationTokenPayload>(ref payloadReader);
+            tokenPayloadBytes = tokenPayloadBytes[..bytesLength];
 
-        return payload.PL;
+            var payloadReader = new Utf8JsonReader(tokenPayloadBytes);
+
+            var payload = JsonSerializer.Deserialize<AuthenticationTokenPayload>(ref payloadReader);
+
+            return payload.PL;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(tokenPayloadBytesRaw);
+        }
+
     }
 
     private readonly struct AuthenticationTokenPayload

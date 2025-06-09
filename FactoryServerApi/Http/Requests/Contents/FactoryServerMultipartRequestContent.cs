@@ -2,11 +2,15 @@
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace FactoryServerApi.Http.Requests.Contents;
 
 public abstract class FactoryServerMultipartRequestContent : MultipartFormDataContent
 {
+    private static readonly MediaTypeHeaderValue JsonMediaType = new(MediaTypeNames.Application.Json);
+    private static readonly MediaTypeHeaderValue PlainTextMediaType = new(MediaTypeNames.Text.Plain);
+    private static readonly MediaTypeHeaderValue OctetStreamMediaType = new(MediaTypeNames.Application.Octet);
 
     public string Function { get; }
 
@@ -14,25 +18,34 @@ public abstract class FactoryServerMultipartRequestContent : MultipartFormDataCo
     {
         Function = function;
         Headers.ContentEncoding.Clear();
-        var requestData = new Dictionary<string, object>()
+
+        // Build and serialize metadata part
+        var requestData = new
         {
-            {"function", Function },
-            {"data", data },
+            function = Function,
+            data
         };
-        var requestDataContent = new StringContent(JsonSerializer.Serialize(requestData), Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Json));
+
+        var requestDataJson = JsonSerializer.Serialize(requestData);
+        var requestDataContent = new StringContent(requestDataJson, Encoding.UTF8, JsonMediaType);
         Add(requestDataContent, "data");
-        var explicitCharsetContent = new StringContent(Encoding.UTF8.WebName, Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Text.Plain));
-        Add(explicitCharsetContent, "_charset_");
-        if (part is Stream str)
+
+        // Explicit charset declaration
+        var charsetContent = new StringContent(Encoding.UTF8.WebName, Encoding.UTF8, PlainTextMediaType);
+        Add(charsetContent, "_charset_");
+
+        // Add main content part
+        if (part is Stream streamPart)
         {
-            var fileContent = new StreamContent(str);
-            fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Octet);
-            Add(fileContent, partName, fileName);
+            var streamContent = new StreamContent(streamPart);
+            streamContent.Headers.ContentType = OctetStreamMediaType;
+            Add(streamContent, partName, fileName);
         }
         else
         {
-            var additionalContent = new StringContent(JsonSerializer.Serialize(part), Encoding.UTF8, MediaTypeHeaderValue.Parse(MediaTypeNames.Application.Json));
-            Add(additionalContent, partName);
+            var partJson = JsonSerializer.Serialize(part);
+            var jsonContent = new StringContent(partJson, Encoding.UTF8, JsonMediaType);
+            Add(jsonContent, partName);
         }
     }
 }

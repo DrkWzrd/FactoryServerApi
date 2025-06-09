@@ -1,6 +1,4 @@
-﻿
-
-using FactoryServerApi.Http;
+﻿using FactoryServerApi.Http;
 
 namespace FactoryServerApi;
 

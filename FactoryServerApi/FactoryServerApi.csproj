@@ -6,10 +6,10 @@
         <TargetFramework>net9.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <AssemblyVersion>1.0.239</AssemblyVersion>
-        <FileVersion>1.0.239</FileVersion>
+        <AssemblyVersion>1.0.310</AssemblyVersion>
+        <FileVersion>1.0.310</FileVersion>
         <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-        <Version>1.0.306</Version>
+        <Version>1.0.310</Version>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
@@ -27,16 +27,10 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Compile Remove="publish\**" />
-      <EmbeddedResource Remove="publish\**" />
-      <None Remove="publish\**" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
-        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0" />
-        <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.5" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.5" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.5" />
+        <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.5" />
     </ItemGroup>
 
     <ItemGroup>

@@ -1,25 +1,25 @@
-﻿using Microsoft.Extensions.Options;
+﻿using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Extensions.Options;
+
 
 namespace FactoryServerApi.Udp;
 
-internal class FactoryServerUdpClient : IFactoryServerUdpClient
+internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
 {
     private readonly TimeProvider _tProvider;
     private readonly UdpClient _client;
     private readonly IPEndPoint _serverEndPoint;
     private readonly UdpOptions _options;
 
-    private CancellationTokenSource _pollingStopTokenSource;
+    private CancellationTokenSource _pollingStopTokenSource = new();
+    private readonly ConcurrentDictionary<ulong, bool> _sentCookies = [];
 
-    private readonly ConcurrentDictionary<ulong, bool> _sentCookies;
-
-    private bool IsListening { get; set; }
-
-    private bool IsRunning { get; set; }
+    private volatile bool _isListening;
+    private volatile bool _isRunning;
 
     public event EventHandler<FactoryServerStateUdpResponse>? ServerStateReceived;
     public event EventHandler<Exception>? ErrorOccurred;
@@ -29,199 +29,195 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient
         _client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
         _serverEndPoint = serverEndPoint;
         _tProvider = timeProvider;
-        _sentCookies = [];
-        _pollingStopTokenSource = new CancellationTokenSource();
         _options = options.Value;
     }
 
-    public Task StartPollingAsync(TimeSpan duration = default, ValueTask<ulong>? cookieGenerator = null, CancellationToken cancellationToken = default)
+    public Task StartPollingAsync(TimeSpan duration = default, ICookieGenerator? cookieGenerator = null, CancellationToken cancellationToken = default)
     {
-        if (IsRunning)
+        if (_isRunning)
             return Task.CompletedTask;
 
         if (_pollingStopTokenSource.IsCancellationRequested || !_pollingStopTokenSource.TryReset())
             _pollingStopTokenSource = new CancellationTokenSource();
 
-        var resultCTS = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _pollingStopTokenSource.Token);
+        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _pollingStopTokenSource.Token);
 
         if (duration > TimeSpan.Zero)
         {
-            var durationCTS = new CancellationTokenSource(duration);
-            resultCTS = CancellationTokenSource.CreateLinkedTokenSource(resultCTS.Token, durationCTS.Token);
+            var durationCts = new CancellationTokenSource(duration);
+            linkedCts = CancellationTokenSource.CreateLinkedTokenSource(linkedCts.Token, durationCts.Token);
         }
-        return StartPollingPrivateAsync(cookieGenerator, resultCTS.Token);
+
+        return StartPollingPrivateAsync(cookieGenerator, linkedCts.Token);
     }
 
     public Task StopPollingAsync()
     {
-        if (!IsRunning)
+        if (!_isRunning)
             return Task.CompletedTask;
 
         _sentCookies.Clear();
         return _pollingStopTokenSource.CancelAsync();
     }
 
-    private async Task StartPollingPrivateAsync(ValueTask<ulong>? cookieGenerator, CancellationToken cancellationToken = default)
+    private async Task StartPollingPrivateAsync(ICookieGenerator? cookieGenerator, CancellationToken ct)
     {
-        IsRunning = true;
+        _isRunning = true;
 
-        if (!IsListening)
-            _ = StartListeningPrivateAsync(cancellationToken);
+        if (!_isListening)
+            _ = StartListeningPrivateAsync(ct);
 
-        await Task.Delay(500, cancellationToken);
+        await Task.Delay(500, ct);
+
         try
         {
-            while (!cancellationToken.IsCancellationRequested)
+            while (!ct.IsCancellationRequested)
             {
                 ulong? cookie = null;
 
                 if (cookieGenerator is not null)
-                    cookie = await cookieGenerator.Value;
+                    cookie = await cookieGenerator.GetCookieAsync(_tProvider);
 
                 for (int i = 0; i < _options.MessagesPerPoll; i++)
-                    await ((IFactoryServerUdpClient)this).SendPollingMessageAsync(cookie, cancellationToken);
+                    await SendPollingMessageAsync(cookie, ct);
 
-                await Task.Delay(_options.DelayBetweenPolls, cancellationToken);
+                await Task.Delay(_options.DelayBetweenPolls, ct);
             }
         }
-        catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-
+            // graceful cancel
         }
-
-        IsRunning = false;
-    }
-
-    Task IFactoryServerUdpClient.StartListeningInternalAsync(CancellationToken cancellationToken)
-    {
-        return StartListeningPrivateAsync(cancellationToken);
-    }
-
-    private async Task StartListeningPrivateAsync(CancellationToken cancellationToken = default)
-    {
-        IsListening = true;
-        var currentTry = 1;
-        while (!cancellationToken.IsCancellationRequested)
+        finally
         {
-            var timeoutCTS = new CancellationTokenSource(_options.DelayBetweenPolls + TimeSpan.FromSeconds(1));
+            _isRunning = false;
+        }
+    }
+
+    private async Task StartListeningPrivateAsync(CancellationToken ct)
+    {
+        _isListening = true;
+        var attempt = 1;
+
+        while (!ct.IsCancellationRequested)
+        {
+            var timeoutCts = new CancellationTokenSource(_options.DelayBetweenPolls + TimeSpan.FromSeconds(1));
+
             try
             {
-                await ReceiveMessagePrivateAsync(timeoutCTS, false, cancellationToken);
+                await ReceiveMessagePrivateAsync(timeoutCts, false, ct);
+                attempt = 1; // reset retry counter after success
             }
-            catch (OperationCanceledException ex) when (ex.CancellationToken == timeoutCTS.Token)
+            catch (OperationCanceledException ex) when (ex.CancellationToken == timeoutCts.Token)
             {
-                if (currentTry > _options.TimeoutRetriesBeforeStop)
+                if (attempt++ > _options.TimeoutRetriesBeforeStop)
                 {
-                    ErrorOccurred?.Invoke(this, new TimeoutException($"More than {_options.TimeoutRetriesBeforeStop} tries ({(_options.DelayBetweenPolls * currentTry):ss} seconds) without server response."));
+                    EmitError(new TimeoutException($"No server response after {attempt - 1} attempts (~{(_options.DelayBetweenPolls * attempt).TotalSeconds:N0}s)."));
                     break;
                 }
-                currentTry++;
             }
-            catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-
+                // graceful shutdown
             }
             catch (Exception ex)
             {
-                ErrorOccurred?.Invoke(this, ex);
+                EmitError(ex);
             }
         }
-        IsListening = false;
+
+        _isListening = false;
     }
 
-    public Task ReceiveMessageAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    public Task ReceiveMessageAsync(TimeSpan timeout, CancellationToken ct = default)
     {
-        var timeoutCTS = new CancellationTokenSource(timeout + TimeSpan.FromSeconds(1));
-        return ReceiveMessagePrivateAsync(timeoutCTS, true, cancellationToken);
+        var timeoutCts = new CancellationTokenSource(timeout + TimeSpan.FromSeconds(1));
+        return ReceiveMessagePrivateAsync(timeoutCts, true, ct);
     }
 
-
-    private async Task ReceiveMessagePrivateAsync(CancellationTokenSource timeoutCTS, bool throwEx, CancellationToken cancellationToken= default)
+    private async Task ReceiveMessagePrivateAsync(CancellationTokenSource timeoutCts, bool throwEx, CancellationToken ct)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        UdpReceiveResult result = await _client.ReceiveAsync(timeoutCTS.Token);
+        ct.ThrowIfCancellationRequested();
 
-        var receivedUtc = _tProvider.GetUtcNow();
-        Memory<byte> receivedData = result.Buffer;
+        UdpReceiveResult result = await _client.ReceiveAsync(timeoutCts.Token);
+        Memory<byte> data = result.Buffer;
+        var now = _tProvider.GetUtcNow();
 
-        if (receivedData.Length < 22 || receivedData.Span[^1] != _options.MessageTermination)
+        if (data.Length < 22 || data.Span[^1] != _options.MessageTermination)
         {
-            var ex = new InvalidDataException("Invalid server udp response");
-            if (throwEx)
-                throw ex;
-            ErrorOccurred?.Invoke(this, ex);
+            HandleInvalid(throwEx, "Too short or bad termination");
             return;
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
+        var span = data.Span;
 
-        //filter bad responses
-        if (BinaryPrimitives.ReadUInt16LittleEndian(receivedData.Span[..2]) != _options.ProtocolMagic
-            || receivedData.Span[2] != (byte)FactoryServerUdpMessageType.ServerStateResponse
-            || receivedData.Span[3] != _options.ProtocolVersion
-            || receivedData.Span[^1] != _options.MessageTermination)
+        if (BinaryPrimitives.ReadUInt16LittleEndian(span) != _options.ProtocolMagic
+            || span[2] != (byte)FactoryServerUdpMessageType.ServerStateResponse
+            || span[3] != _options.ProtocolVersion)
         {
-            var ex = new InvalidDataException("Invalid server udp response");
-            if (throwEx)
-                throw ex;
-            ErrorOccurred?.Invoke(this, ex);
+            HandleInvalid(throwEx, "Bad header");
             return;
         }
 
-        var cookie = BinaryPrimitives.ReadUInt64LittleEndian(receivedData.Span.Slice(4, 8));
+        ulong cookie = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(4, 8));
 
-        //filter polls we didn't do, weird and maybe impossible, but...
-        if (!_sentCookies.Remove(cookie, out _))
+        if (!_sentCookies.TryRemove(cookie, out _))
         {
-            if (throwEx)
-            {
-                var ex = new InvalidDataException("Cookie not found");
-                throw ex;
-            }
+            HandleInvalid(throwEx, "Unexpected cookie");
             return;
         }
 
         try
         {
-            var serverStateResponse = FactoryServerStateUdpResponse.Deserialize(receivedData.Span[4..^1], receivedUtc);
+            var response = FactoryServerStateUdpResponse.Deserialize(span[4..^1], now);
             if (!throwEx)
-                ServerStateReceived?.Invoke(this, serverStateResponse);
+                ServerStateReceived?.Invoke(this, response);
         }
-        catch (Exception)
+        catch
         {
-            var ex = new InvalidDataException("Invalid server udp response");
-            if (throwEx)
+            HandleInvalid(throwEx, "Deserialization failed");
+        }
+
+        void HandleInvalid(bool shouldThrow, string reason)
+        {
+            var ex = new InvalidDataException($"Invalid UDP response: {reason}");
+            if (shouldThrow)
                 throw ex;
-            ErrorOccurred?.Invoke(this, ex);
+            EmitError(ex);
         }
     }
 
-    public async Task SendPollingMessageAsync(ulong? cookie = null, CancellationToken cancellationToken = default)
+    public async Task SendPollingMessageAsync(ulong? cookie = null, CancellationToken ct = default)
     {
-        Memory<byte> message = new byte[5 + 8];
-        BinaryPrimitives.TryWriteUInt16LittleEndian(message.Span, _options.ProtocolMagic);
-        message.Span[2] = (byte)FactoryServerUdpMessageType.PollServerState;
-        message.Span[3] = _options.ProtocolVersion;
-        if (!cookie.HasValue)
-            cookie = (ulong)_tProvider.GetUtcNow().Ticks;
+        byte[] messageRaw = ArrayPool<byte>.Shared.Rent(5 + 8);
+        Memory<byte> message = messageRaw.AsMemory()[..(5 + 8)];
 
-        BinaryPrimitives.TryWriteUInt64LittleEndian(message.Span.Slice(4, 8), cookie.Value);
+        Span<byte> messageSpan = message.Span;
 
-        message.Span[^1] = _options.MessageTermination;
+        BinaryPrimitives.WriteUInt16LittleEndian(messageSpan, _options.ProtocolMagic);
+        messageSpan[2] = (byte)FactoryServerUdpMessageType.PollServerState;
+        messageSpan[3] = _options.ProtocolVersion;
+
+        cookie ??= (ulong)_tProvider.GetUtcNow().Ticks;
+        BinaryPrimitives.WriteUInt64LittleEndian(messageSpan.Slice(4, 8), cookie.Value);
+        messageSpan[^1] = _options.MessageTermination;
 
         try
         {
             _sentCookies.TryAdd(cookie.Value, true);
-            await _client.SendAsync(message, _serverEndPoint, cancellationToken);
+            await _client.SendAsync(message, _serverEndPoint, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            ErrorOccurred?.Invoke(this, ex);
+            EmitError(ex);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(messageRaw);
         }
     }
 
-    public void Dispose()
-    {
-        _client.Dispose();
-    }
+    private void EmitError(Exception ex) => ErrorOccurred?.Invoke(this, ex);
+
+    public void Dispose() => _client.Dispose();
 }

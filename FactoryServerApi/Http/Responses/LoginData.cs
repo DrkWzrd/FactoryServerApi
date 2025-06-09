@@ -2,5 +2,10 @@
 
 public class LoginData : FactoryServerResponseContentData
 {
-    public string AuthenticationToken { get; init; }
+    public string AuthenticationToken { get; }
+
+    public LoginData(string authenticationToken)
+    {
+        AuthenticationToken = authenticationToken;
+    }
 }
