@@ -1,5 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using System.Net;
+﻿using System.Net;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace FactoryServerApi.Udp;
 
@@ -19,16 +20,27 @@ internal class FactoryServerUdpClientFactory : IFactoryServerUdpClientFactory
 
     public IFactoryServerUdpClient BuildFactoryServerUdpService(IPEndPoint serverEndPoint)
     {
-        return new FactoryServerUdpClient(serverEndPoint, _sProvider.GetRequiredKeyedService<TimeProvider>("factoryServerLocalSystemTimeProvider"));
+        IOptions<UdpOptions> udpOptions = _sProvider.GetRequiredService<IOptions<UdpOptions>>();
+        return new FactoryServerUdpClient(serverEndPoint, _sProvider.GetRequiredKeyedService<TimeProvider>("factoryServerLocalSystemTimeProvider"), udpOptions);
     }
 
-    public async Task<IFactoryServerUdpClient> BuildFactoryServerUdpServiceAsync(string host, int port)
+    public async Task<IFactoryServerUdpClient> BuildFactoryServerUdpClientAsync(string host, int port, CancellationToken cancellationToken = default)
     {
-        if (!IPAddress.TryParse(host, out var ipAddress))
+        UriHostNameType checkHost = Uri.CheckHostName(host);
+        IPAddress? iPAddress = null;
+        if (checkHost == UriHostNameType.IPv4 || checkHost == UriHostNameType.IPv6)
         {
-            var hostEntry = await Dns.GetHostEntryAsync(host);
-            ipAddress = hostEntry.AddressList[0];
+            _ = IPAddress.TryParse(host, out iPAddress);
         }
-        return BuildFactoryServerUdpService(new IPEndPoint(ipAddress, port));
+        else if (checkHost == UriHostNameType.Dns)
+        {
+            IPAddress[] hostAddresses = await Dns.GetHostAddressesAsync(host, cancellationToken);
+            iPAddress = hostAddresses[0];
+        }
+
+        if (iPAddress is null)
+            throw new ArgumentException("Invalid host");
+
+        return BuildFactoryServerUdpService(new IPEndPoint(iPAddress, port));
     }
 }

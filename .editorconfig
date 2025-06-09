@@ -1,0 +1,4 @@
+﻿[*.cs]
+
+# IDE0290: Usar constructor principal
+csharp_style_prefer_primary_constructors = false

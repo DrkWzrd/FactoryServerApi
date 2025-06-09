@@ -1,13 +1,13 @@
 ﻿
 namespace FactoryServerApi.Udp;
 
-public interface IFactoryServerUdpClient
+public interface IFactoryServerUdpClient : IDisposable
 {
-    event EventHandler<FactoryServerStateResponse>? ServerStateReceived;
+    event EventHandler<FactoryServerStateUdpResponse>? ServerStateReceived;
     event EventHandler<Exception>? ErrorOccurred;
 
-    Task PollServerStateAsync(ulong? cookie = null, CancellationToken cancellationToken = default);
-    Task PollServerStateAsync(TimeSpan duration, TimeSpan delayBetweenPolls, bool repeatPoll = false, int messagesByPoll = 1, Func<ulong>? cookieGenerator = null, CancellationToken cancellationToken = default);
-    Task StartListeningAsync(CancellationToken cancellationToken = default);
-    Task StopListeningAsync();
+    Task SendPollingMessageAsync(ulong? cookie = null, CancellationToken cancellationToken = default);
+    Task StartPollingAsync(TimeSpan duration = default, ICookieGenerator? cookieGenerator = null, CancellationToken cancellationToken = default);
+    Task StopPollingAsync();
+    Task ReceiveMessageAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
 }
