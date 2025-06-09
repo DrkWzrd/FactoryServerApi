@@ -25,8 +25,8 @@ public class FactoryServerStateUdpResponse
 
     public static FactoryServerStateUdpResponse Deserialize(ReadOnlySpan<byte> data, DateTimeOffset receivedUtc)
     {
-        var numSubStates = data[21];
-        var response = new FactoryServerStateUdpResponse(numSubStates, receivedUtc)
+        byte numSubStates = data[21];
+        FactoryServerStateUdpResponse response = new(numSubStates, receivedUtc)
         {
             Cookie = BinaryPrimitives.ReadUInt64LittleEndian(data[..8]),
             ServerState = (FactoryServerState)data[8],

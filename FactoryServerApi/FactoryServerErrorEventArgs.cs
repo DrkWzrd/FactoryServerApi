@@ -1,5 +1,5 @@
-﻿using FactoryServerApi.Http.Responses;
-using System.Text.Json;
+﻿using System.Text.Json;
+using FactoryServerApi.Http.Responses;
 
 namespace FactoryServerApi;
 

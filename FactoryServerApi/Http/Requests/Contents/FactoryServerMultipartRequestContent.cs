@@ -2,7 +2,6 @@
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace FactoryServerApi.Http.Requests.Contents;
 
@@ -26,25 +25,25 @@ public abstract class FactoryServerMultipartRequestContent : MultipartFormDataCo
             data
         };
 
-        var requestDataJson = JsonSerializer.Serialize(requestData);
-        var requestDataContent = new StringContent(requestDataJson, Encoding.UTF8, JsonMediaType);
+        string requestDataJson = JsonSerializer.Serialize(requestData);
+        StringContent requestDataContent = new(requestDataJson, Encoding.UTF8, JsonMediaType);
         Add(requestDataContent, "data");
 
         // Explicit charset declaration
-        var charsetContent = new StringContent(Encoding.UTF8.WebName, Encoding.UTF8, PlainTextMediaType);
+        StringContent charsetContent = new(Encoding.UTF8.WebName, Encoding.UTF8, PlainTextMediaType);
         Add(charsetContent, "_charset_");
 
         // Add main content part
         if (part is Stream streamPart)
         {
-            var streamContent = new StreamContent(streamPart);
+            StreamContent streamContent = new(streamPart);
             streamContent.Headers.ContentType = OctetStreamMediaType;
             Add(streamContent, partName, fileName);
         }
         else
         {
-            var partJson = JsonSerializer.Serialize(part);
-            var jsonContent = new StringContent(partJson, Encoding.UTF8, JsonMediaType);
+            string partJson = JsonSerializer.Serialize(part);
+            StringContent jsonContent = new(partJson, Encoding.UTF8, JsonMediaType);
             Add(jsonContent, partName);
         }
     }

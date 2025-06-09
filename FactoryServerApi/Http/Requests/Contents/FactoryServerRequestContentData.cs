@@ -26,7 +26,7 @@ internal sealed class FactoryServerRequestContentData
     {
         public override FactoryServerRequestContentData? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(ref reader, options);
+            Dictionary<string, object>? dict = JsonSerializer.Deserialize<Dictionary<string, object>>(ref reader, options);
             return dict is null
                 ? null :
                 new FactoryServerRequestContentData(dict);

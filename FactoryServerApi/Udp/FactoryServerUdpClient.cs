@@ -40,11 +40,11 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
         if (_pollingStopTokenSource.IsCancellationRequested || !_pollingStopTokenSource.TryReset())
             _pollingStopTokenSource = new CancellationTokenSource();
 
-        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _pollingStopTokenSource.Token);
+        CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _pollingStopTokenSource.Token);
 
         if (duration > TimeSpan.Zero)
         {
-            var durationCts = new CancellationTokenSource(duration);
+            CancellationTokenSource durationCts = new(duration);
             linkedCts = CancellationTokenSource.CreateLinkedTokenSource(linkedCts.Token, durationCts.Token);
         }
 
@@ -97,11 +97,11 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
     private async Task StartListeningPrivateAsync(CancellationToken ct)
     {
         _isListening = true;
-        var attempt = 1;
+        int attempt = 1;
 
         while (!ct.IsCancellationRequested)
         {
-            var timeoutCts = new CancellationTokenSource(_options.DelayBetweenPolls + TimeSpan.FromSeconds(1));
+            CancellationTokenSource timeoutCts = new(_options.DelayBetweenPolls + TimeSpan.FromSeconds(1));
 
             try
             {
@@ -131,7 +131,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
 
     public Task ReceiveMessageAsync(TimeSpan timeout, CancellationToken ct = default)
     {
-        var timeoutCts = new CancellationTokenSource(timeout + TimeSpan.FromSeconds(1));
+        CancellationTokenSource timeoutCts = new(timeout + TimeSpan.FromSeconds(1));
         return ReceiveMessagePrivateAsync(timeoutCts, true, ct);
     }
 
@@ -141,7 +141,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
 
         UdpReceiveResult result = await _client.ReceiveAsync(timeoutCts.Token);
         Memory<byte> data = result.Buffer;
-        var now = _tProvider.GetUtcNow();
+        DateTimeOffset now = _tProvider.GetUtcNow();
 
         if (data.Length < 22 || data.Span[^1] != _options.MessageTermination)
         {
@@ -149,7 +149,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
             return;
         }
 
-        var span = data.Span;
+        Span<byte> span = data.Span;
 
         if (BinaryPrimitives.ReadUInt16LittleEndian(span) != _options.ProtocolMagic
             || span[2] != (byte)FactoryServerUdpMessageType.ServerStateResponse
@@ -169,7 +169,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
 
         try
         {
-            var response = FactoryServerStateUdpResponse.Deserialize(span[4..^1], now);
+            FactoryServerStateUdpResponse response = FactoryServerStateUdpResponse.Deserialize(span[4..^1], now);
             if (!throwEx)
                 ServerStateReceived?.Invoke(this, response);
         }
@@ -180,7 +180,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
 
         void HandleInvalid(bool shouldThrow, string reason)
         {
-            var ex = new InvalidDataException($"Invalid UDP response: {reason}");
+            InvalidDataException ex = new($"Invalid UDP response: {reason}");
             if (shouldThrow)
                 throw ex;
             EmitError(ex);

@@ -51,8 +51,8 @@ public abstract class FactoryServerRequestContent : HttpContent
         if (_buffer is not null)
             return;
 
-        var writer = new ArrayBufferWriter<byte>();
-        using var jsonWriter = new Utf8JsonWriter(writer, new JsonWriterOptions { SkipValidation = true });
+        ArrayBufferWriter<byte> writer = new();
+        using Utf8JsonWriter jsonWriter = new(writer, new JsonWriterOptions { SkipValidation = true });
 
         jsonWriter.WriteStartObject();
         jsonWriter.WriteString("function", Function);

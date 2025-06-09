@@ -15,10 +15,10 @@ internal class FactoryServerHttpClientFactory : IFactoryServerHttpClientFactory
 
     public async Task<IFactoryServerHttpClient> BuildFactoryServerHttpClientAsync(string host, int port, string? authToken = null, CancellationToken cancellationToken = default)
     {
-        var httpClientFactory = _sProv.GetRequiredService<IHttpClientFactory>();
-        var options = _sProv.GetRequiredService<IOptions<HttpOptions>>();
+        IHttpClientFactory httpClientFactory = _sProv.GetRequiredService<IHttpClientFactory>();
+        IOptions<HttpOptions> options = _sProv.GetRequiredService<IOptions<HttpOptions>>();
 
-        var client = new FactoryServerHttpClient(httpClientFactory, host, port, options);
+        FactoryServerHttpClient client = new(httpClientFactory, host, port, options);
 
         if (authToken is not null)
             await client.SetAuthenticationTokenAsync(authToken, cancellationToken);

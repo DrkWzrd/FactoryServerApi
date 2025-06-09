@@ -1,8 +1,8 @@
-﻿using FactoryServerApi.Http;
+﻿using System.Collections.Concurrent;
+using System.Net.Sockets;
+using FactoryServerApi.Http;
 using FactoryServerApi.Http.Responses;
 using FactoryServerApi.Udp;
-using System.Collections.Concurrent;
-using System.Net.Sockets;
 
 namespace FactoryServerApi;
 
@@ -62,7 +62,7 @@ internal class FactoryServerClient : IFactoryServerClient
         {
             try
             {
-                var receiveMessageTask = _pingUdpClient.ReceiveMessageAsync(timeout, cancellationToken);
+                Task receiveMessageTask = _pingUdpClient.ReceiveMessageAsync(timeout, cancellationToken);
                 await _pingUdpClient.SendPollingMessageAsync(_pingUdpCounter++, cancellationToken);
                 await Task.Delay(200, cancellationToken);
                 await receiveMessageTask;
@@ -81,11 +81,11 @@ internal class FactoryServerClient : IFactoryServerClient
             }
         }
 
-        var timeoutCTS = new CancellationTokenSource(timeout);
-        var mergedCTS = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCTS.Token);
+        CancellationTokenSource timeoutCTS = new(timeout);
+        CancellationTokenSource mergedCTS = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCTS.Token);
         try
         {
-            var healthResponse = await _httpClient.HealthCheckAsync(null, mergedCTS.Token);
+            FactoryServerResponseContent<HealthCheckData> healthResponse = await _httpClient.HealthCheckAsync(null, mergedCTS.Token);
             HandleResponseContentErrors(healthResponse);
             return true;
         }
@@ -112,7 +112,7 @@ internal class FactoryServerClient : IFactoryServerClient
     {
         if (_httpClient.AuthenticationToken is not null)
         {
-            var verifyError = await _httpClient.VerifyAuthenticationTokenAsync(cancellationToken);
+            FactoryServerError? verifyError = await _httpClient.VerifyAuthenticationTokenAsync(cancellationToken);
             return verifyError is null;
         }
         return false;
@@ -125,7 +125,7 @@ internal class FactoryServerClient : IFactoryServerClient
 
     public async Task AdministratorLoginAsync(ReadOnlyMemory<char> password, CancellationToken cancellationToken = default)
     {
-        var loginResult = await _httpClient.PasswordLoginAsync(FactoryServerPrivilegeLevel.Administrator, password, cancellationToken);
+        FactoryServerResponseContent<LoginData> loginResult = await _httpClient.PasswordLoginAsync(FactoryServerPrivilegeLevel.Administrator, password, cancellationToken);
         if (HandleResponseContentErrors(loginResult))
             return;
 
@@ -134,11 +134,11 @@ internal class FactoryServerClient : IFactoryServerClient
 
     public async Task ClientLoginAsync(ReadOnlyMemory<char>? password, CancellationToken cancellationToken = default)
     {
-        var task = password is null
+        Task<FactoryServerResponseContent<LoginData>> task = password is null
             ? _httpClient.PasswordlessLoginAsync(FactoryServerPrivilegeLevel.Client, cancellationToken)
             : _httpClient.PasswordLoginAsync(FactoryServerPrivilegeLevel.Client, password.Value, cancellationToken);
 
-        var loginResult = await task;
+        FactoryServerResponseContent<LoginData> loginResult = await task;
 
         if (HandleResponseContentErrors(loginResult))
             return;
@@ -157,14 +157,14 @@ internal class FactoryServerClient : IFactoryServerClient
         await _currentServerStateSemaphore.WaitAsync(cancellationToken);
         try
         {
-            var claimCheck = await CheckIfServerIsClaimed(cancellationToken);
+            ClaimCheck claimCheck = await CheckIfServerIsClaimed(cancellationToken);
             _serverInfo.IsClaimed = claimCheck.IsClaimed;
             if (claimCheck.IsClaimed)
                 throw new InvalidOperationException("The server is already claimed.");
 
             await _httpClient.SetAuthenticationTokenAsync(claimCheck.InitialAdminAuthToken!, cancellationToken);
 
-            var claimResult = await _httpClient.ClaimServerAsync(serverName, adminPassword, cancellationToken);
+            FactoryServerResponseContent<LoginData> claimResult = await _httpClient.ClaimServerAsync(serverName, adminPassword, cancellationToken);
             if (HandleResponseContentErrors(claimResult))
                 return;
 
@@ -179,7 +179,7 @@ internal class FactoryServerClient : IFactoryServerClient
 
     public async Task InitializeClientAsync(CancellationToken cancellationToken = default)
     {
-        var claimCheck = await CheckIfServerIsClaimed(cancellationToken);
+        ClaimCheck claimCheck = await CheckIfServerIsClaimed(cancellationToken);
         _serverInfo.IsClaimed = claimCheck.IsClaimed;
 
         _ = ProcessChangedSubStatesQueue(cancellationToken);
@@ -188,7 +188,7 @@ internal class FactoryServerClient : IFactoryServerClient
 
     private async Task<ClaimCheck> CheckIfServerIsClaimed(CancellationToken cancellationToken = default)
     {
-        var initialAdminTryResponse = await _httpClient.PasswordlessLoginAsync(FactoryServerPrivilegeLevel.InitialAdmin, cancellationToken);
+        FactoryServerResponseContent<LoginData> initialAdminTryResponse = await _httpClient.PasswordlessLoginAsync(FactoryServerPrivilegeLevel.InitialAdmin, cancellationToken);
         if (HandleResponseContentErrors(initialAdminTryResponse))
         {
             return new(true, null, initialAdminTryResponse.Error); //If we can't, the server is claimed
@@ -198,7 +198,7 @@ internal class FactoryServerClient : IFactoryServerClient
 
     private void UdpClient_ErrorOccurred(object? sender, Exception e)
     {
-        var args = new FactoryServerErrorEventArgs(e);
+        FactoryServerErrorEventArgs args = new(e);
         ErrorOccurred?.Invoke(this, args);
     }
 
@@ -206,11 +206,11 @@ internal class FactoryServerClient : IFactoryServerClient
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            var serverState = _serverInfo.ServerState;
+            FactoryServerState serverState = _serverInfo.ServerState;
 
             if (serverState != FactoryServerState.Loading
                 && serverState != FactoryServerState.Offline
-                && _statesToRequestQueue.TryDequeue(out var subState))
+                && _statesToRequestQueue.TryDequeue(out FactoryServerSubState subState))
             {
                 await ProcessChangedSubStateAsync(subState, cancellationToken);
             }
@@ -237,12 +237,12 @@ internal class FactoryServerClient : IFactoryServerClient
 
             await UpdateCurrentStateAsync(e);
 
-            var subStates = e.SubStates;
+            IReadOnlyList<FactoryServerSubState> subStates = e.SubStates;
             IEnumerable<FactoryServerSubState> changedSubStates = _cachedSubStatesVersions.Count == 0
                 ? subStates
                 : subStates.Where(sS => !_cachedSubStatesVersions.ContainsKey(sS.SubStateId) || sS.SubStateVersion != _cachedSubStatesVersions[sS.SubStateId]);
 
-            foreach (var subState in changedSubStates)
+            foreach (FactoryServerSubState subState in changedSubStates)
                 EnqueueSubStateQuery(subState, e.Cookie);
         }
     }
@@ -254,7 +254,7 @@ internal class FactoryServerClient : IFactoryServerClient
         {
             _serverInfo.UpdateValue(response);
 
-            var healthResponse = await _httpClient.HealthCheckAsync(null, cancellationToken: cancellationToken);
+            FactoryServerResponseContent<HealthCheckData> healthResponse = await _httpClient.HealthCheckAsync(null, cancellationToken: cancellationToken);
 
             if (HandleResponseContentErrors(healthResponse))
                 throw new InvalidOperationException("Something happened to http server.");
@@ -286,27 +286,27 @@ internal class FactoryServerClient : IFactoryServerClient
         {
             _serverInfo.UpdateValue(response);
 
-            var healthResponse = await _httpClient.HealthCheckAsync(null, cancellationToken: cancellationToken);
+            FactoryServerResponseContent<HealthCheckData> healthResponse = await _httpClient.HealthCheckAsync(null, cancellationToken: cancellationToken);
 
             if (HandleResponseContentErrors(healthResponse))
                 throw new InvalidOperationException("Something happened to http server.");
             else
                 _serverInfo.UpdateValue(healthResponse.Data!);
 
-            var queryServerStateResponse = await _httpClient.QueryServerStateAsync(cancellationToken: cancellationToken);
+            FactoryServerResponseContent<QueryServerStateData> queryServerStateResponse = await _httpClient.QueryServerStateAsync(cancellationToken: cancellationToken);
 
             if (!HandleResponseContentErrors(queryServerStateResponse))
                 _serverInfo.UpdateValue(queryServerStateResponse.Data!);
 
-            var optionsResponse = await _httpClient.GetServerOptionsAsync(cancellationToken: cancellationToken);
+            FactoryServerResponseContent<GetServerOptionsData> optionsResponse = await _httpClient.GetServerOptionsAsync(cancellationToken: cancellationToken);
             if (!HandleResponseContentErrors(optionsResponse))
                 _serverInfo.UpdateValue(optionsResponse.Data!);
 
-            var advancedSettingsResponse = await _httpClient.GetAdvancedGameSettingsAsync(cancellationToken: cancellationToken);
+            FactoryServerResponseContent<GetAdvancedGameSettingsData> advancedSettingsResponse = await _httpClient.GetAdvancedGameSettingsAsync(cancellationToken: cancellationToken);
             if (!HandleResponseContentErrors(advancedSettingsResponse))
                 _serverInfo.UpdateValue(advancedSettingsResponse.Data!);
 
-            var sessionsResponse = await _httpClient.EnumerateSessionsAsync(cancellationToken: cancellationToken);
+            FactoryServerResponseContent<EnumerateSessionsData> sessionsResponse = await _httpClient.EnumerateSessionsAsync(cancellationToken: cancellationToken);
             if (!HandleResponseContentErrors(sessionsResponse))
                 _serverInfo.UpdateValue(sessionsResponse.Data!);
 
@@ -357,7 +357,7 @@ internal class FactoryServerClient : IFactoryServerClient
         await _currentServerStateSemaphore.WaitAsync(cancellationToken);
         try
         {
-            var gracefullyManaged = await HandleCustomSubStateAsync(_serverInfo, subState, _httpClient, cancellationToken);
+            bool gracefullyManaged = await HandleCustomSubStateAsync(_serverInfo, subState, _httpClient, cancellationToken);
             if (gracefullyManaged)
                 UpdateSubStateCache(subState);
         }
@@ -378,7 +378,7 @@ internal class FactoryServerClient : IFactoryServerClient
         await _currentServerStateSemaphore.WaitAsync(cancellationToken);
         try
         {
-            var responseContent = await queryFunc(_httpClient);
+            FactoryServerResponseContent<T> responseContent = await queryFunc(_httpClient);
 
             if (HandleResponseContentErrors(responseContent))
                 return;

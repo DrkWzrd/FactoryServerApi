@@ -7,7 +7,7 @@ internal class PasswordLoginRequestContent : FactoryServerRequestContent
         if (password.IsEmpty && minimumPrivilegeLevel > FactoryServerPrivilegeLevel.Client)
             throw new InvalidOperationException("What are you trying to do? Login as admin without the admin password?");
 
-        var dict = new Dictionary<string, object>()
+        Dictionary<string, object> dict = new()
         {
             {"MinimumPrivilegeLevel", minimumPrivilegeLevel },
             {"Password", password.ToString() }

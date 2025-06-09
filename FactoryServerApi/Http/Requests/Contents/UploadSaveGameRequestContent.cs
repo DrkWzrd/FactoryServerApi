@@ -7,7 +7,7 @@ internal class UploadSaveGameRequestContent : FactoryServerMultipartRequestConte
 
     private static FactoryServerRequestContentData GetRequestContentData(string saveName, bool loadSaveGame, bool enableAdvancedGameSettings)
     {
-        var data = new Dictionary<string, object>
+        Dictionary<string, object> data = new()
         {
             { "SaveName", saveName },
             { "LoadSaveGame", loadSaveGame },

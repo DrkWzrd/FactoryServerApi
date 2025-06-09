@@ -8,7 +8,7 @@ internal class SetAdminPasswordRequestContent : FactoryServerRequestContent
         if (password.IsEmpty)
             throw new InvalidOperationException();
 
-        var dict = new Dictionary<string, object>()
+        Dictionary<string, object> dict = new()
         {
             {"Password", password },
             {"AuthenticationToken", authenticationToken },

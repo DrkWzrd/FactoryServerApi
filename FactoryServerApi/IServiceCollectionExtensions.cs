@@ -1,12 +1,12 @@
-﻿using FactoryServerApi.Http;
+﻿using System.Net.Http.Headers;
+using System.Net.Mime;
+using System.Reflection;
+using FactoryServerApi.Http;
 using FactoryServerApi.Udp;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using System.Net.Http.Headers;
-using System.Net.Mime;
-using System.Reflection;
 
 namespace FactoryServerApi;
 
@@ -53,13 +53,13 @@ public static class IServiceCollectionExtensions
 
         host.Services.AddHttpClient("factoryServerHttpClient", (sProv, hClient) =>
             {
-                var options = sProv.GetRequiredService<IOptions<HttpOptions>>();
+                IOptions<HttpOptions> options = sProv.GetRequiredService<IOptions<HttpOptions>>();
                 hClient.Timeout = options.Value.ConnectionTimeout;
 
                 hClient.DefaultRequestHeaders.Accept.Add(MediaTypeWithQualityHeaderValue.Parse(MediaTypeNames.Application.Json));
                 hClient.DefaultRequestHeaders.Accept.Add(MediaTypeWithQualityHeaderValue.Parse(MediaTypeNames.Application.Octet));
 
-                var pihv = new ProductInfoHeaderValue(options.Value.UserAgentAppName,
+                ProductInfoHeaderValue pihv = new(options.Value.UserAgentAppName,
                     options.Value.UserAgentAppVersion?.ToString()
                         ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
                         ?? "0.0");
@@ -68,14 +68,14 @@ public static class IServiceCollectionExtensions
             })
             .ConfigurePrimaryHttpMessageHandler(sProv =>
             {
-                var options = sProv.GetRequiredService<IOptions<SslOptions>>();
+                IOptions<SslOptions> options = sProv.GetRequiredService<IOptions<SslOptions>>();
 
                 switch (options?.Value.ServerCertificateValidationStrategy ?? null)
                 {
                     case SslValidationStrategy.NoValidation:
                         return NoValidationHandler;
                     case SslValidationStrategy.Custom:
-                        var certValidationStrategy = sProv.GetRequiredService<IServerCertificateValidationStrategy>();
+                        IServerCertificateValidationStrategy certValidationStrategy = sProv.GetRequiredService<IServerCertificateValidationStrategy>();
                         return new HttpClientHandler()
                         {
                             ServerCertificateCustomValidationCallback = certValidationStrategy.CustomValidationCallback,

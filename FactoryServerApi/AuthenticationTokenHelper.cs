@@ -1,5 +1,4 @@
 ﻿using System.Buffers;
-using System.Buffers.Text;
 using System.Text.Json;
 
 namespace FactoryServerApi;
@@ -11,9 +10,9 @@ public static class AuthenticationTokenHelper
         if (authenticationToken is null)
             return FactoryServerPrivilegeLevel.NotAuthenticated;
 
-        var splitPoint = authenticationToken.Value.Span.IndexOf('.');
+        int splitPoint = authenticationToken.Value.Span.IndexOf('.');
 
-        var tokenPayloadBase64 = authenticationToken.Value.Span[..splitPoint];
+        ReadOnlySpan<char> tokenPayloadBase64 = authenticationToken.Value.Span[..splitPoint];
 
         byte[] tokenPayloadBytesRaw = ArrayPool<byte>.Shared.Rent(tokenPayloadBase64.Length * 2);
 
@@ -22,14 +21,14 @@ public static class AuthenticationTokenHelper
         try
         {
 
-            if (!Convert.TryFromBase64Chars(tokenPayloadBase64, tokenPayloadBytes, out var bytesLength))
+            if (!Convert.TryFromBase64Chars(tokenPayloadBase64, tokenPayloadBytes, out int bytesLength))
                 throw new InvalidDataException("Token payload was invalid.");
 
             tokenPayloadBytes = tokenPayloadBytes[..bytesLength];
 
-            var payloadReader = new Utf8JsonReader(tokenPayloadBytes);
+            Utf8JsonReader payloadReader = new(tokenPayloadBytes);
 
-            var payload = JsonSerializer.Deserialize<AuthenticationTokenPayload>(ref payloadReader);
+            AuthenticationTokenPayload payload = JsonSerializer.Deserialize<AuthenticationTokenPayload>(ref payloadReader);
 
             return payload.PL;
         }

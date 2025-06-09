@@ -9,7 +9,7 @@ public readonly struct FactoryServerSubState
 
     public static FactoryServerSubState Deserialize(ReadOnlySpan<byte> data, ref int offset)
     {
-        var subState = new FactoryServerSubState
+        FactoryServerSubState subState = new()
         {
             SubStateId = (FactoryServerSubStateId)data[0],
             SubStateVersion = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(1, 2))

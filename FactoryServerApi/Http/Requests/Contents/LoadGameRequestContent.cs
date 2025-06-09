@@ -4,7 +4,7 @@ internal class LoadGameRequestContent : FactoryServerRequestContent
 {
     public LoadGameRequestContent(string saveName, bool enableAdvancedGameSettings) : base("LoadGame")
     {
-        var data = new Dictionary<string, object>
+        Dictionary<string, object> data = new()
         {
             { "SaveName", saveName },
             { "EnableAdvancedGameSettings", enableAdvancedGameSettings }

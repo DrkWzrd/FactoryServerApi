@@ -15,12 +15,12 @@ internal class FactoryServerClientFactory : IFactoryServerClientFactory
 
     public async Task<IFactoryServerClient> BuildFactoryServerClientAsync(string host, int port, string? apiToken = null, CancellationToken cancellationToken = default)
     {
-        var udpFactory = _sProv.GetRequiredService<IFactoryServerUdpClientFactory>();
-        var httpFactory = _sProv.GetRequiredService<IFactoryServerHttpClientFactory>();
-        var pollClient = await udpFactory.BuildFactoryServerUdpClientAsync(host, port, cancellationToken);
-        var pingClient = await udpFactory.BuildFactoryServerUdpClientAsync(host, port, cancellationToken);
-        var httpClient = await httpFactory.BuildFactoryServerHttpClientAsync(host, port, apiToken, cancellationToken);
-        var client = new FactoryServerClient(pollClient, pingClient, httpClient);
+        IFactoryServerUdpClientFactory udpFactory = _sProv.GetRequiredService<IFactoryServerUdpClientFactory>();
+        IFactoryServerHttpClientFactory httpFactory = _sProv.GetRequiredService<IFactoryServerHttpClientFactory>();
+        IFactoryServerUdpClient pollClient = await udpFactory.BuildFactoryServerUdpClientAsync(host, port, cancellationToken);
+        IFactoryServerUdpClient pingClient = await udpFactory.BuildFactoryServerUdpClientAsync(host, port, cancellationToken);
+        IFactoryServerHttpClient httpClient = await httpFactory.BuildFactoryServerHttpClientAsync(host, port, apiToken, cancellationToken);
+        FactoryServerClient client = new(pollClient, pingClient, httpClient);
 
         return client;
     }
