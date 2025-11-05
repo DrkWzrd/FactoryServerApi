@@ -41,6 +41,8 @@ public static class IServiceCollectionExtensions
         ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
     };
 
+    private static readonly HttpClientHandler DefaultHandler = new();
+
     public static IHostApplicationBuilder AddFactoryServerServices(this IHostApplicationBuilder host)
     {
         if (!File.Exists(_defaultSettingsFilename))
@@ -81,7 +83,7 @@ public static class IServiceCollectionExtensions
                             ServerCertificateCustomValidationCallback = certValidationStrategy.CustomValidationCallback,
                         };
                     default:
-                        return new HttpClientHandler();
+                        return DefaultHandler;
                 }
             });
 

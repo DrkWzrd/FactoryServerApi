@@ -18,7 +18,6 @@ public abstract class FactoryServerMultipartRequestContent : MultipartFormDataCo
         Function = function;
         Headers.ContentEncoding.Clear();
 
-        // Build and serialize metadata part
         var requestData = new
         {
             function = Function,
@@ -29,11 +28,9 @@ public abstract class FactoryServerMultipartRequestContent : MultipartFormDataCo
         StringContent requestDataContent = new(requestDataJson, Encoding.UTF8, JsonMediaType);
         Add(requestDataContent, "data");
 
-        // Explicit charset declaration
         StringContent charsetContent = new(Encoding.UTF8.WebName, Encoding.UTF8, PlainTextMediaType);
         Add(charsetContent, "_charset_");
 
-        // Add main content part
         if (part is Stream streamPart)
         {
             StreamContent streamContent = new(streamPart);

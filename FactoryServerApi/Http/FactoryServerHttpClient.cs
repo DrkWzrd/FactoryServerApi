@@ -12,10 +12,9 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
 {
     private const string _playerIdHeader = "X-FactoryGame-PlayerId";
 
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly HttpClient _httpClient;
+    private readonly Lock _stateLock = new();
     private readonly HttpOptions _options;
-    private readonly SemaphoreSlim _httpClientSemaphore = new(1, 1);
-    private readonly Uri _baseAddress;
 
     public string? AuthenticationToken { get; private set; }
 
@@ -23,61 +22,45 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
 
     public FactoryServerHttpClient(IHttpClientFactory httpClientFactory, string host, int port, IOptions<HttpOptions> options)
     {
-        _baseAddress = new UriBuilder("https", host, port).Uri;
-        _httpClientFactory = httpClientFactory;
         _options = options.Value;
+        _httpClient = httpClientFactory.CreateClient("factoryServerHttpClient");
+        _httpClient.BaseAddress = new UriBuilder("https", host, port).Uri;
     }
 
-    public async Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default)
+    public Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default)
     {
-        await _httpClientSemaphore.WaitAsync(cancellationToken);
-        try
+        lock (_stateLock)
         {
             PlayerId = playerId;
         }
-        finally
-        {
-            _httpClientSemaphore.Release();
-        }
+        return Task.CompletedTask;
     }
 
-    public async Task ClearPlayerIdAsync(CancellationToken cancellationToken = default)
+    public Task ClearPlayerIdAsync(CancellationToken cancellationToken = default)
     {
-        await _httpClientSemaphore.WaitAsync(cancellationToken);
-        try
+        lock (_stateLock)
         {
             PlayerId = null;
         }
-        finally
-        {
-            _httpClientSemaphore.Release();
-        }
+        return Task.CompletedTask;
     }
 
-    public async Task SetAuthenticationTokenAsync(string authenticationToken, CancellationToken cancellationToken = default)
+    public Task SetAuthenticationTokenAsync(string authenticationToken, CancellationToken cancellationToken = default)
     {
-        await _httpClientSemaphore.WaitAsync(cancellationToken);
-        try
+        lock (_stateLock)
         {
             AuthenticationToken = authenticationToken;
         }
-        finally
-        {
-            _httpClientSemaphore.Release();
-        }
+        return Task.CompletedTask;
     }
 
-    public async Task ClearAuthenticationTokenAsync(CancellationToken cancellationToken = default)
+    public Task ClearAuthenticationTokenAsync(CancellationToken cancellationToken = default)
     {
-        await _httpClientSemaphore.WaitAsync(cancellationToken);
-        try
+        lock (_stateLock)
         {
             AuthenticationToken = null;
         }
-        finally
-        {
-            _httpClientSemaphore.Release();
-        }
+        return Task.CompletedTask;
     }
 
     public async Task<FactoryServerResponseContent<HealthCheckData>> HealthCheckAsync(string? clientCustomData, CancellationToken cancellationToken = default)
@@ -225,65 +208,48 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         return await ExecuteMaybeVoidRequestAsync(content, cancellationToken);
     }
 
-    private void SetupHttpClient(HttpClient hClient)
-    {
-        hClient.BaseAddress = _baseAddress;
-        if (AuthenticationToken is not null)
-            hClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, AuthenticationToken);
-
-        if (PlayerId is not null)
-            hClient.DefaultRequestHeaders.Add(_playerIdHeader, PlayerId.Value.ToString());
-    }
-
     private async Task<FactoryServerResponseContent<TData>> ExecuteRequestWithEnsuredJsonResponse<TData>(HttpContent content, CancellationToken cancellationToken = default)
         where TData : FactoryServerResponseContentData
     {
-        HttpClient httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
-        await _httpClientSemaphore.WaitAsync(cancellationToken);
-
-        try
-        {
-            SetupHttpClient(httpClient);
-            HttpResponseMessage response = await httpClient.PostAsync(_options.ApiPath, content, cancellationToken);
-            return await HandleEnsuredJsonResponseAsync<TData>(response, cancellationToken);
-        }
-        finally
-        {
-            _httpClientSemaphore.Release();
-        }
+        var response = await ExecuteRequestAsync(content, cancellationToken);
+        return await HandleEnsuredJsonResponseAsync<TData>(response, cancellationToken);
     }
 
     private async Task<FactoryServerResponseContent<DownloadSaveGameData>> ExecuteRequestWithMaybeOctetResponse(HttpContent content, CancellationToken cancellationToken = default)
     {
-        HttpClient httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
-        await _httpClientSemaphore.WaitAsync(cancellationToken);
-
-        try
-        {
-            SetupHttpClient(httpClient);
-            HttpResponseMessage response = await httpClient.PostAsync(_options.ApiPath, content, cancellationToken);
-            return await HandleMaybeOctetResponseAsync(response, cancellationToken);
-        }
-        finally
-        {
-            _httpClientSemaphore.Release();
-        }
+        var response = await ExecuteRequestAsync(content, cancellationToken);
+        return await HandleMaybeOctetResponseAsync(response, cancellationToken);
     }
 
     private async Task<FactoryServerError?> ExecuteMaybeVoidRequestAsync(HttpContent content, CancellationToken cancellationToken = default)
     {
-        HttpClient httpClient = _httpClientFactory.CreateClient("factoryServerHttpClient");
-        await _httpClientSemaphore.WaitAsync(cancellationToken);
-        try
+        var response = await ExecuteRequestAsync(content, cancellationToken);
+        return await HandleMaybeVoidResponseAsync(response, cancellationToken);
+    }
+
+    private async Task<HttpResponseMessage> ExecuteRequestAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        string? authToken;
+        FactoryGamePlayerId? playerId;
+        lock (_stateLock)
         {
-            SetupHttpClient(httpClient);
-            HttpResponseMessage response = await httpClient.PostAsync(_options.ApiPath, content, cancellationToken);
-            return await HandleMaybeVoidResponseAsync(response, cancellationToken);
+            authToken = AuthenticationToken;
+            playerId = PlayerId;
         }
-        finally
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, _options.ApiPath)
         {
-            _httpClientSemaphore.Release();
-        }
+            Content = content,
+        };
+
+        request.Headers.Authorization = authToken is not null
+            ? new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, authToken)
+            : null;
+
+        if (playerId is not null)
+            request.Headers.Add(_playerIdHeader, playerId.Value.ToString());
+
+        return await _httpClient.SendAsync(request, cancellationToken);
     }
 
     private static async Task<FactoryServerResponseContent<TData>> HandleEnsuredJsonResponseAsync<TData>(HttpResponseMessage response, CancellationToken cancellationToken = default)
@@ -292,8 +258,12 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
             throw new InvalidOperationException("No content found in response when content was expected.");
 
-        if (response.Content.Headers.ContentType?.MediaType != MediaTypeNames.Application.Json)
-            throw new InvalidOperationException("Unexpected response content media type.");
+        if (response.Content.Headers.ContentType?.MediaType?.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) != true)
+        {
+            throw new InvalidOperationException(
+                $"Unexpected response content media type: '{response.Content.Headers.ContentType}'. " +
+                $"Expected 'application/json'. Status: {response.StatusCode}.");
+        }
 
         FactoryServerResponseContent<TData> result = await response.Content.ReadFromJsonAsync<FactoryServerResponseContent<TData>>(cancellationToken)
             ?? throw new InvalidDataException("Unexpected response data from server.");
@@ -306,8 +276,12 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
             return null;
 
-        if (response.Content.Headers.ContentType?.MediaType != MediaTypeNames.Application.Json)
-            throw new InvalidOperationException("Unexpected response content media type.");
+        if (response.Content.Headers.ContentType?.MediaType?.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) != true)
+        {
+            throw new InvalidOperationException(
+                $"Unexpected response content media type: '{response.Content.Headers.ContentType}'. " +
+                $"Expected 'application/json' for error. Status: {response.StatusCode}.");
+        }
 
         FactoryServerError result = await response.Content.ReadFromJsonAsync<FactoryServerError>(cancellationToken)
             ?? throw new InvalidDataException("Unexpected response data from server.");

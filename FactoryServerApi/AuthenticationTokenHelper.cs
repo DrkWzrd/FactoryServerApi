@@ -14,9 +14,11 @@ public static class AuthenticationTokenHelper
 
         ReadOnlySpan<char> tokenPayloadBase64 = authenticationToken.Value.Span[..splitPoint];
 
-        byte[] tokenPayloadBytesRaw = ArrayPool<byte>.Shared.Rent(tokenPayloadBase64.Length * 2);
+        var maxLength = (tokenPayloadBase64.Length * 3 + 3) / 4;
 
-        Span<byte> tokenPayloadBytes = tokenPayloadBytesRaw.AsSpan(0, tokenPayloadBase64.Length * 2);
+        byte[] tokenPayloadBytesRaw = ArrayPool<byte>.Shared.Rent(maxLength);
+
+        Span<byte> tokenPayloadBytes = tokenPayloadBytesRaw.AsSpan(0, maxLength);
 
         try
         {

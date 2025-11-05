@@ -223,42 +223,49 @@ internal class FactoryServerClient : IFactoryServerClient
 
     private async void InternalServerStateHandler(object? sender, FactoryServerStateUdpResponse e)
     {
-        if (_serverInfo.ServerState == FactoryServerState.Offline)
+        try
         {
-            await HandleFirstTimeServerQueries(e);
-        }
-        else
-        {
-            if (e.ServerNetCL != _serverInfo.ChangeList) //improbable, but
+            if (_serverInfo.ServerState == FactoryServerState.Offline)
             {
-                ErrorOccurred?.Invoke(this, new FactoryServerErrorEventArgs(new NotSupportedException("Server and client CL version differ.")));
-                return;
+                await HandleFirstTimeServerQueries(e);
             }
+            else
+            {
+                if (e.ServerNetCL != _serverInfo.ChangeList) //improbable, but
+                {
+                    ErrorOccurred?.Invoke(this, new FactoryServerErrorEventArgs(new NotSupportedException("Server and client CL version differ.")));
+                    return;
+                }
 
-            await UpdateCurrentStateAsync(e);
+                await UpdateCurrentStateAsync(e);
 
-            IReadOnlyList<FactoryServerSubState> subStates = e.SubStates;
-            IEnumerable<FactoryServerSubState> changedSubStates = _cachedSubStatesVersions.Count == 0
-                ? subStates
-                : subStates.Where(sS => !_cachedSubStatesVersions.ContainsKey(sS.SubStateId) || sS.SubStateVersion != _cachedSubStatesVersions[sS.SubStateId]);
+                IReadOnlyList<FactoryServerSubState> subStates = e.SubStates;
+                IEnumerable<FactoryServerSubState> changedSubStates = _cachedSubStatesVersions.Count == 0
+                    ? subStates
+                    : subStates.Where(sS => !_cachedSubStatesVersions.ContainsKey(sS.SubStateId) || sS.SubStateVersion != _cachedSubStatesVersions[sS.SubStateId]);
 
-            foreach (FactoryServerSubState subState in changedSubStates)
-                EnqueueSubStateQuery(subState, e.Cookie);
+                foreach (FactoryServerSubState subState in changedSubStates)
+                    EnqueueSubStateQuery(subState, e.Cookie);
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorOccurred?.Invoke(this, new FactoryServerErrorEventArgs(ex));
         }
     }
 
     private async Task UpdateCurrentStateAsync(FactoryServerStateUdpResponse response, CancellationToken cancellationToken = default)
     {
+        FactoryServerResponseContent<HealthCheckData> healthResponse =
+            await _httpClient.HealthCheckAsync(null, cancellationToken: cancellationToken);
+
+        if (HandleResponseContentErrors(healthResponse))
+            throw new InvalidOperationException("Something happened to http server.");
+
         await _currentServerStateSemaphore.WaitAsync(cancellationToken);
         try
         {
             _serverInfo.UpdateValue(response);
-
-            FactoryServerResponseContent<HealthCheckData> healthResponse = await _httpClient.HealthCheckAsync(null, cancellationToken: cancellationToken);
-
-            if (HandleResponseContentErrors(healthResponse))
-                throw new InvalidOperationException("Something happened to http server.");
-
             _serverInfo.UpdateValue(healthResponse.Data!);
 
             ServerStateChanged?.Invoke(this, new FactoryServerStateChangedEventArgs(_serverInfo));
@@ -281,33 +288,54 @@ internal class FactoryServerClient : IFactoryServerClient
 
     private async Task HandleFirstTimeServerQueries(FactoryServerStateUdpResponse response, CancellationToken cancellationToken = default)
     {
+        static async Task<T?> TryAwaitRequest<T>(Task<T> task) where T : class
+        {
+            try
+            {
+                return await task;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        var healthTask = _httpClient.HealthCheckAsync(null, cancellationToken);
+
+        var queryStateTask = TryAwaitRequest(_httpClient.QueryServerStateAsync(cancellationToken));
+        var optionsTask = TryAwaitRequest(_httpClient.GetServerOptionsAsync(cancellationToken));
+        var advancedSettingsTask = TryAwaitRequest(_httpClient.GetAdvancedGameSettingsAsync(cancellationToken));
+        var sessionsTask = TryAwaitRequest(_httpClient.EnumerateSessionsAsync(cancellationToken));
+
+        FactoryServerResponseContent<HealthCheckData> healthResponse = await healthTask;
+
+        await Task.WhenAll(queryStateTask, optionsTask, advancedSettingsTask, sessionsTask);
+
+        var queryServerStateResponse = queryStateTask.Result;
+        var optionsResponse = optionsTask.Result;
+        var advancedSettingsResponse = advancedSettingsTask.Result;
+        var sessionsResponse = sessionsTask.Result;
+
         await _currentServerStateSemaphore.WaitAsync(cancellationToken);
         try
         {
             _serverInfo.UpdateValue(response);
-
-            FactoryServerResponseContent<HealthCheckData> healthResponse = await _httpClient.HealthCheckAsync(null, cancellationToken: cancellationToken);
 
             if (HandleResponseContentErrors(healthResponse))
                 throw new InvalidOperationException("Something happened to http server.");
             else
                 _serverInfo.UpdateValue(healthResponse.Data!);
 
-            FactoryServerResponseContent<QueryServerStateData> queryServerStateResponse = await _httpClient.QueryServerStateAsync(cancellationToken: cancellationToken);
-
-            if (!HandleResponseContentErrors(queryServerStateResponse))
+            if (queryServerStateResponse != null && !HandleResponseContentErrors(queryServerStateResponse))
                 _serverInfo.UpdateValue(queryServerStateResponse.Data!);
 
-            FactoryServerResponseContent<GetServerOptionsData> optionsResponse = await _httpClient.GetServerOptionsAsync(cancellationToken: cancellationToken);
-            if (!HandleResponseContentErrors(optionsResponse))
+            if (optionsResponse != null && !HandleResponseContentErrors(optionsResponse))
                 _serverInfo.UpdateValue(optionsResponse.Data!);
 
-            FactoryServerResponseContent<GetAdvancedGameSettingsData> advancedSettingsResponse = await _httpClient.GetAdvancedGameSettingsAsync(cancellationToken: cancellationToken);
-            if (!HandleResponseContentErrors(advancedSettingsResponse))
+            if (advancedSettingsResponse != null && !HandleResponseContentErrors(advancedSettingsResponse))
                 _serverInfo.UpdateValue(advancedSettingsResponse.Data!);
 
-            FactoryServerResponseContent<EnumerateSessionsData> sessionsResponse = await _httpClient.EnumerateSessionsAsync(cancellationToken: cancellationToken);
-            if (!HandleResponseContentErrors(sessionsResponse))
+            if (sessionsResponse != null && !HandleResponseContentErrors(sessionsResponse))
                 _serverInfo.UpdateValue(sessionsResponse.Data!);
 
             ServerStateChanged?.Invoke(this, new FactoryServerStateChangedEventArgs(_serverInfo));
