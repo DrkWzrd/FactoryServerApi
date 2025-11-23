@@ -6,9 +6,7 @@ namespace FactoryServerApi;
 [JsonConverter(typeof(MapNameJsonConverter))]
 public class MapName
 {
-    private static readonly Lazy<MapName> _persistentLevel = new(() => new MapName("Persistent_Level"));
-
-    public static MapName PersistentLevel => _persistentLevel.Value;
+    public static MapName PersistentLevel { get; } = new MapName("Persistent_Level");
 
     private readonly string _string;
 

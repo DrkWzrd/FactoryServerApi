@@ -6,17 +6,12 @@ namespace FactoryServerApi;
 [JsonConverter(typeof(StartingLocationJsonConverter))]
 public class StartingLocation
 {
-    private static readonly Lazy<StartingLocation> _grassFields = new(() => new StartingLocation(nameof(GrassFields)));
-    private static readonly Lazy<StartingLocation> _rockyDesert = new(() => new StartingLocation(nameof(RockyDesert)));
-    private static readonly Lazy<StartingLocation> _northernForest = new(() => new StartingLocation(nameof(NorthernForest)));
-    private static readonly Lazy<StartingLocation> _duneDesert = new(() => new StartingLocation(nameof(DuneDesert)));
-
     public static readonly StartingLocation Empty = new();
 
-    public static StartingLocation GrassFields => _grassFields.Value;
-    public static StartingLocation RockyDesert => _rockyDesert.Value;
-    public static StartingLocation NorthernForest => _northernForest.Value;
-    public static StartingLocation DuneDesert => _duneDesert.Value;
+    public static StartingLocation GrassFields { get; } = new StartingLocation(nameof(GrassFields));
+    public static StartingLocation RockyDesert { get; } = new StartingLocation(nameof(RockyDesert));
+    public static StartingLocation NorthernForest { get; } = new StartingLocation(nameof(NorthernForest));
+    public static StartingLocation DuneDesert { get; } = new StartingLocation(nameof(DuneDesert));
 
     private readonly string? _string;
 

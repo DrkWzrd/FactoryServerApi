@@ -10,7 +10,7 @@ namespace FactoryServerApi.Http;
 
 internal class FactoryServerHttpClient : IFactoryServerHttpClient
 {
-    private const string _playerIdHeader = "X-FactoryGame-PlayerId";
+    private const string PlayerIdHeader = "X-FactoryGame-PlayerId";
 
     private readonly HttpClient _httpClient;
     private readonly Lock _stateLock = new();
@@ -247,7 +247,7 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
             : null;
 
         if (playerId is not null)
-            request.Headers.Add(_playerIdHeader, playerId.Value.ToString());
+            request.Headers.Add(PlayerIdHeader, playerId.Value.ToString());
 
         return await _httpClient.SendAsync(request, cancellationToken);
     }

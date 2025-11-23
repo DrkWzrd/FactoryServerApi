@@ -12,8 +12,8 @@ namespace FactoryServerApi;
 
 public static class IServiceCollectionExtensions
 {
-    private const string _defaultSettingsFilename = $"{nameof(FactoryServerApi)}.settings.json";
-    private const string _defaultJsonFileContent =
+    private const string DefaultSettingsFilename = $"{nameof(FactoryServerApi)}.settings.json";
+    private const string DefaultJsonFileContent =
         """
         {
             "udpConfiguration": {
@@ -45,10 +45,10 @@ public static class IServiceCollectionExtensions
 
     public static IHostApplicationBuilder AddFactoryServerServices(this IHostApplicationBuilder host)
     {
-        if (!File.Exists(_defaultSettingsFilename))
-            File.WriteAllText(_defaultSettingsFilename, _defaultJsonFileContent);
+        if (!File.Exists(DefaultSettingsFilename))
+            File.WriteAllText(DefaultSettingsFilename, DefaultJsonFileContent);
 
-        host.Configuration.AddJsonFile(_defaultSettingsFilename, false);
+        host.Configuration.AddJsonFile(DefaultSettingsFilename, false);
         host.Services.AddOptions<HttpOptions>().BindConfiguration("httpConfiguration");
         host.Services.AddOptions<SslOptions>().BindConfiguration("sslConfiguration");
         host.Services.AddOptions<UdpOptions>().BindConfiguration("udpConfiguration");
