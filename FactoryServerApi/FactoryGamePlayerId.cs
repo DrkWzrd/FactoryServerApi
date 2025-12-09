@@ -30,8 +30,8 @@ public readonly struct FactoryGamePlayerId
     public override string ToString()
     {
         return _platformByte == 1
-            ? $"{_platformByte:X}{_epicId}"
-            : $"{_platformByte:X}{_steamId}";
+            ? $"{_platformByte:X2}{_epicId}"
+            : $"{_platformByte:X2}{_steamId}";
     }
 
 }

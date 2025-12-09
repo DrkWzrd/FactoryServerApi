@@ -2,7 +2,7 @@
 
 namespace FactoryServerApi;
 
-[JsonConverter(typeof(JsonStringEnumConverter))]
+[JsonConverter(typeof(JsonStringEnumConverter<FactoryServerHealthState>))]
 public enum FactoryServerHealthState
 {
     Healthy,

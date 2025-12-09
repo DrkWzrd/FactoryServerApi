@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Net.Sockets;
+using System.Threading.Channels;
 using FactoryServerApi.Http;
 using FactoryServerApi.Http.Responses;
 using FactoryServerApi.Udp;
@@ -12,13 +13,14 @@ internal class FactoryServerClient : IFactoryServerClient
     private readonly IFactoryServerUdpClient _pollingUdpClient;
     private readonly IFactoryServerUdpClient _pingUdpClient;
     private readonly IFactoryServerHttpClient _httpClient;
-    private readonly ConcurrentQueue<FactoryServerSubState> _statesToRequestQueue;
+    private readonly Channel<FactoryServerSubState> _statesToRequestQueue;
     private readonly ConcurrentDictionary<FactoryServerSubStateId, ulong> _subStateIdsQueriesUniquenessGuard;
     private readonly SemaphoreSlim _currentServerStateSemaphore;
     private readonly FactoryServerInfo _serverInfo;
     private ulong _pingUdpCounter;
 
-    private readonly Dictionary<FactoryServerSubStateId, ushort> _cachedSubStatesVersions;
+
+    private readonly ConcurrentDictionary<FactoryServerSubStateId, ushort> _cachedSubStatesVersions;
 
     public event EventHandler<FactoryServerErrorEventArgs>? ErrorOccurred;
     public event EventHandler<FactoryServerStateChangedEventArgs>? ServerStateChanged;
@@ -35,7 +37,12 @@ internal class FactoryServerClient : IFactoryServerClient
         _pingUdpClient = pingClient;
         _httpClient = httpClient;
         _currentServerStateSemaphore = new(1, 1);
-        _statesToRequestQueue = [];
+        _statesToRequestQueue = Channel.CreateUnbounded<FactoryServerSubState>(new UnboundedChannelOptions
+        {
+            SingleReader = true, // only have one loop (ProcessChangedSubStatesQueue) reading this.
+            SingleWriter = false,
+            AllowSynchronousContinuations = false // prevent UDP socket thread from getting hijacked by the consumer logic.
+        });
         _subStateIdsQueriesUniquenessGuard = [];
         _cachedSubStatesVersions = [];
         _pollingUdpClient.ServerStateReceived += InternalServerStateHandler;
@@ -63,7 +70,8 @@ internal class FactoryServerClient : IFactoryServerClient
             try
             {
                 Task receiveMessageTask = _pingUdpClient.ReceiveMessageAsync(timeout, cancellationToken);
-                await _pingUdpClient.SendPollingMessageAsync(_pingUdpCounter++, cancellationToken);
+                ulong nextCookie = Interlocked.Increment(ref _pingUdpCounter);
+                await _pingUdpClient.SendPollingMessageAsync(nextCookie, cancellationToken);
                 await Task.Delay(200, cancellationToken);
                 await receiveMessageTask;
                 return true;
@@ -76,9 +84,7 @@ internal class FactoryServerClient : IFactoryServerClient
             {
                 return false;
             }
-            catch (InvalidDataException)
-            {
-            }
+            catch (InvalidDataException) { }
         }
 
         CancellationTokenSource timeoutCTS = new(timeout);
@@ -92,9 +98,6 @@ internal class FactoryServerClient : IFactoryServerClient
         catch (OperationCanceledException ex) when (ex.CancellationToken == mergedCTS.Token)
         {
             return false;
-        }
-        finally
-        {
         }
     }
 
@@ -204,22 +207,25 @@ internal class FactoryServerClient : IFactoryServerClient
 
     private async Task ProcessChangedSubStatesQueue(CancellationToken cancellationToken = default)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        while (await _statesToRequestQueue.Reader.WaitToReadAsync(cancellationToken))
         {
-            FactoryServerState serverState = _serverInfo.ServerState;
+            while (_statesToRequestQueue.Reader.TryRead(out var subState))
+            {
+                // If server is loading, we can't query HTTP. 
+                // We must wait/backoff or re-queue. 
+                // Simple approach: Wait until state is valid.
+                while (_serverInfo.ServerState == FactoryServerState.Loading
+                    || _serverInfo.ServerState == FactoryServerState.Offline)
+                {
+                    await Task.Delay(500, cancellationToken);
+                }
 
-            if (serverState != FactoryServerState.Loading
-                && serverState != FactoryServerState.Offline
-                && _statesToRequestQueue.TryDequeue(out FactoryServerSubState subState))
-            {
                 await ProcessChangedSubStateAsync(subState, cancellationToken);
-            }
-            else
-            {
-                await Task.Delay(1000, cancellationToken);
             }
         }
     }
+
+    private int _isInitializing;
 
     private async void InternalServerStateHandler(object? sender, FactoryServerStateUdpResponse e)
     {
@@ -227,7 +233,18 @@ internal class FactoryServerClient : IFactoryServerClient
         {
             if (_serverInfo.ServerState == FactoryServerState.Offline)
             {
-                await HandleFirstTimeServerQueries(e);
+                if (Interlocked.CompareExchange(ref _isInitializing, 1, 0) == 0)
+                {
+                    try
+                    {
+                        await HandleFirstTimeServerQueries(e);
+                    }
+                    finally
+                    {
+                        _isInitializing = 0;
+                    }
+                }
+                return;
             }
             else
             {
@@ -240,7 +257,7 @@ internal class FactoryServerClient : IFactoryServerClient
                 await UpdateCurrentStateAsync(e);
 
                 IReadOnlyList<FactoryServerSubState> subStates = e.SubStates;
-                IEnumerable<FactoryServerSubState> changedSubStates = _cachedSubStatesVersions.Count == 0
+                IEnumerable<FactoryServerSubState> changedSubStates = _cachedSubStatesVersions.IsEmpty
                     ? subStates
                     : subStates.Where(sS => !_cachedSubStatesVersions.ContainsKey(sS.SubStateId) || sS.SubStateVersion != _cachedSubStatesVersions[sS.SubStateId]);
 
@@ -281,7 +298,7 @@ internal class FactoryServerClient : IFactoryServerClient
         //if there is a pending request of the same type don't add new one, but we update the cookie
         //for now is useless, but can be used to improve state caching
         if (_subStateIdsQueriesUniquenessGuard.TryAdd(subState.SubStateId, cookie))
-            _statesToRequestQueue.Enqueue(subState);
+            _statesToRequestQueue.Writer.TryWrite(subState);
         else
             _subStateIdsQueriesUniquenessGuard[subState.SubStateId] = cookie;
     }
@@ -448,13 +465,13 @@ internal class FactoryServerClient : IFactoryServerClient
         if (_subStateIdsQueriesUniquenessGuard.TryRemove(handledSubState.SubStateId, out _))
         {
             //if everything is fine and the guard is removed, we update the cached version value
-            _cachedSubStatesVersions.Add(handledSubState.SubStateId, handledSubState.SubStateVersion);
+            _cachedSubStatesVersions[handledSubState.SubStateId] = handledSubState.SubStateVersion;
         }
         else
         {
             //if something is wrong trying to remove the guard we have to enqueue again a query
             //to retry the query and avoid the corrupt state
-            _statesToRequestQueue.Enqueue(handledSubState);
+            _statesToRequestQueue.Writer.TryWrite(handledSubState);
         }
     }
 
