@@ -42,7 +42,8 @@ public abstract class FactoryServerRequestContent : HttpContent
         if (_buffer is not null)
         {
             ArrayPool<byte>.Shared.Return(_buffer);
-            _buffer = null!;
+            _buffer = null;
+            _length = 0;
         }
     }
 
@@ -71,5 +72,7 @@ public abstract class FactoryServerRequestContent : HttpContent
         // Rent and copy to pooled buffer
         _buffer = ArrayPool<byte>.Shared.Rent(_length);
         writer.WrittenSpan.CopyTo(_buffer);
+
+
     }
 }
