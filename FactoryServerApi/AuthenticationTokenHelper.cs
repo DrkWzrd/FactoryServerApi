@@ -22,7 +22,6 @@ public static class AuthenticationTokenHelper
 
         try
         {
-
             if (!Convert.TryFromBase64Chars(tokenPayloadBase64, tokenPayloadBytes, out int bytesLength))
                 throw new InvalidDataException("Token payload was invalid.");
 
