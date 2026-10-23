@@ -158,27 +158,19 @@ internal class FactoryServerClient : IFactoryServerClient
     public async Task ClaimServerAsync(string serverName, ReadOnlyMemory<char> adminPassword, CancellationToken cancellationToken = default)
     {
         //we try get a new InitialAdmin token regardless of the current token
-        await _currentServerStateSemaphore.WaitAsync(cancellationToken);
-        try
-        {
-            ClaimCheck claimCheck = await CheckIfServerIsClaimed(cancellationToken);
-            _serverInfo.IsClaimed = claimCheck.IsClaimed;
-            if (claimCheck.IsClaimed)
-                throw new InvalidOperationException("The server is already claimed.");
+        ClaimCheck claimCheck = await CheckIfServerIsClaimed(cancellationToken);
+        _serverInfo.IsClaimed = claimCheck.IsClaimed;
+        if (claimCheck.IsClaimed)
+            throw new InvalidOperationException("The server is already claimed.");
 
-            await _httpClient.SetAuthenticationTokenAsync(claimCheck.InitialAdminAuthToken!, cancellationToken);
+        await _httpClient.SetAuthenticationTokenAsync(claimCheck.InitialAdminAuthToken!, cancellationToken);
 
-            FactoryServerResponseContent<LoginData> claimResult = await _httpClient.ClaimServerAsync(serverName, adminPassword, cancellationToken);
-            if (HandleResponseContentErrors(claimResult))
-                return;
+        FactoryServerResponseContent<LoginData> claimResult = await _httpClient.ClaimServerAsync(serverName, adminPassword, cancellationToken);
+        if (HandleResponseContentErrors(claimResult))
+            return;
 
-            _serverInfo.IsClaimed = true;
-            await SetAuthenticationTokenAsync(claimResult.Data!.AuthenticationToken, cancellationToken);
-        }
-        finally
-        {
-            _currentServerStateSemaphore.Release();
-        }
+        _serverInfo.IsClaimed = true;
+        await SetAuthenticationTokenAsync(claimResult.Data!.AuthenticationToken, cancellationToken);
     }
 
     public async Task InitializeClientAsync(CancellationToken cancellationToken = default)
@@ -454,10 +446,11 @@ internal class FactoryServerClient : IFactoryServerClient
 
     private async Task ProcessCustomSubStateAsync(FactoryServerSubState subState, CancellationToken cancellationToken)
     {
+        bool gracefullyManaged = await HandleCustomSubStateAsync(_serverInfo, subState, _httpClient, cancellationToken);
+
         await _currentServerStateSemaphore.WaitAsync(cancellationToken);
         try
         {
-            bool gracefullyManaged = await HandleCustomSubStateAsync(_serverInfo, subState, _httpClient, cancellationToken);
             if (gracefullyManaged)
                 UpdateSubStateCache(subState);
             else
@@ -481,20 +474,20 @@ internal class FactoryServerClient : IFactoryServerClient
     private async Task ProcessSubStateAsync<T>(FactoryServerSubState subState, Func<IFactoryServerHttpClient, Task<FactoryServerResponseContent<T>>> queryFunc, CancellationToken cancellationToken = default)
         where T : FactoryServerResponseContentData
     {
+        FactoryServerResponseContent<T> responseContent = await queryFunc(_httpClient);
+
+        if (HandleResponseContentErrors(responseContent))
+        {
+            // The guard is still in place, so re-queue the query after a short backoff
+            // to avoid leaving this sub-state stale forever.
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            _statesToRequestQueue.Writer.TryWrite(subState);
+            return;
+        }
+
         await _currentServerStateSemaphore.WaitAsync(cancellationToken);
         try
         {
-            FactoryServerResponseContent<T> responseContent = await queryFunc(_httpClient);
-
-            if (HandleResponseContentErrors(responseContent))
-            {
-                // The guard is still in place, so re-queue the query after a short backoff
-                // to avoid leaving this sub-state stale forever.
-                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-                _statesToRequestQueue.Writer.TryWrite(subState);
-                return;
-            }
-
             UpdateServerSubState(subState, responseContent.Data!);
             ServerStateChanged?.Invoke(this, new FactoryServerStateChangedEventArgs(_serverInfo));
         }
