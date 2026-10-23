@@ -13,10 +13,10 @@ public readonly struct FactoryGamePlayerId
     public bool IsSteamId => _platformByte == 6;
     public bool IsEpicId => _platformByte == 1;
 
-    public FactoryGamePlayerId(long steamId64)
+    public FactoryGamePlayerId(ulong steamId64)
     {
         Memory<byte> bytes = new byte[8];
-        BinaryPrimitives.WriteInt64BigEndian(bytes.Span, steamId64);
+        BinaryPrimitives.WriteUInt64BigEndian(bytes.Span, steamId64);
         _steamId = Convert.ToHexString(bytes.Span);
         _platformByte = 6;
     }
