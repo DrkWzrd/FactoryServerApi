@@ -1,9 +1,10 @@
-﻿namespace FactoryServerApi;
+
+namespace FactoryServerApi;
 
 public class HttpOptions
 {
-    public TimeSpan ConnectionTimeout { get; init; }
-    public string UserAgentAppName { get; init; } = default!;
-    public Version? UserAgentAppVersion { get; init; }
-    public string ApiPath { get; init; } = default!;
+    public TimeSpan ConnectionTimeout { get; set; } = TimeSpan.FromSeconds(30);
+    public string UserAgentAppName { get; set; } = "factoryServerApi";
+    public Version? UserAgentAppVersion { get; set; } = new(0, 3);
+    public string ApiPath { get; set; } = "api/v1/";
 }

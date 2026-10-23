@@ -13,28 +13,6 @@ namespace FactoryServerApi;
 public static class IServiceCollectionExtensions
 {
     private const string DefaultSettingsFilename = $"{nameof(FactoryServerApi)}.settings.json";
-    private const string DefaultJsonFileContent =
-        """
-        {
-            "udpConfiguration": {
-                "delayBetweenPolls": "00:00:10",
-                "messagesPerPoll": 2,
-                "timeoutRetriesBeforeStop": 3,
-                "protocolMagic": 63189,
-                "protocolVersion": 1,
-                "messageTermination": 1
-            },
-            "httpConfiguration": {
-                "connectionTimeOut": "00:00:30",
-                "userAgentAppName": "factoryServerApi",
-                "userAgentAppVersion": "0.3",
-                "apiPath": "api/v1/"
-            },
-            "sslConfiguration": {
-                "serverCertificateValidationStrategy": "NoValidation"
-            }
-        }
-        """;
 
     private static readonly HttpClientHandler NoValidationHandler = new()
     {
@@ -45,10 +23,10 @@ public static class IServiceCollectionExtensions
 
     public static IHostApplicationBuilder AddFactoryServerServices(this IHostApplicationBuilder host)
     {
-        if (!File.Exists(DefaultSettingsFilename))
-            File.WriteAllText(DefaultSettingsFilename, DefaultJsonFileContent);
-
+        // An optional settings file in the current directory can override the in-code defaults.
         host.Configuration.AddJsonFile(DefaultSettingsFilename, false);
+
+        // Defaults live in the option classes; a settings file only overrides the keys present.
         host.Services.AddOptions<HttpOptions>().BindConfiguration("httpConfiguration");
         host.Services.AddOptions<SslOptions>().BindConfiguration("sslConfiguration");
         host.Services.AddOptions<UdpOptions>().BindConfiguration("udpConfiguration");
