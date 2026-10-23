@@ -23,6 +23,11 @@ internal class FactoryServerClient : IFactoryServerClient
 
     private readonly ConcurrentDictionary<FactoryServerSubStateId, ushort> _cachedSubStatesVersions;
     private FactoryServerStateUdpResponse? _lastProcessedState;
+    private long _lastUdpStateReceivedTicksUtc;
+
+    // If no UDP state arrives for this long, the server is considered unreachable
+    // (polling has already stopped after a few failed attempts).
+    private static readonly TimeSpan NoUdpActivityTimeout = TimeSpan.FromSeconds(30);
 
     public event EventHandler<FactoryServerErrorEventArgs>? ErrorOccurred;
     public event EventHandler<FactoryServerStateChangedEventArgs>? ServerStateChanged;
@@ -237,11 +242,23 @@ internal class FactoryServerClient : IFactoryServerClient
                 // If server is loading, we can't query HTTP. 
                 // We must wait/backoff or re-queue. 
                 // Simple approach: Wait until state is valid.
-                while (_serverInfo.ServerState == FactoryServerState.Loading
-                    || _serverInfo.ServerState == FactoryServerState.Offline)
+                // Bound the wait: if no UDP activity arrives for a while
+                // (server is dead, polling has stopped), drop the uniqueness guard
+                // and stop waiting. The sub-state will be re-detected and
+                // re-queried on the next state change, since its cached version
+                // was never updated.
+                while (_serverInfo.ServerState is FactoryServerState.Loading or FactoryServerState.Offline)
                 {
+                    if (DateTime.UtcNow.Ticks - Interlocked.Read(ref _lastUdpStateReceivedTicksUtc) > NoUdpActivityTimeout.Ticks)
+                    {
+                        _subStateIdsQueriesUniquenessGuard.TryRemove(subState.SubStateId, out _);
+                        break;
+                    }
                     await Task.Delay(500, cancellationToken);
                 }
+
+                if (_serverInfo.ServerState is FactoryServerState.Loading or FactoryServerState.Offline)
+                    continue;
 
                 await ProcessChangedSubStateAsync(subState, cancellationToken);
             }
@@ -255,6 +272,8 @@ internal class FactoryServerClient : IFactoryServerClient
     {
         try
         {
+            Interlocked.Exchange(ref _lastUdpStateReceivedTicksUtc, DateTime.UtcNow.Ticks);
+
             if (!_firstTimeQueriesDone)
             {
                 if (Interlocked.CompareExchange(ref _isInitializing, 1, 0) == 0)
