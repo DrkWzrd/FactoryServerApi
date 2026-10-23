@@ -405,6 +405,12 @@ internal class FactoryServerClient : IFactoryServerClient
             bool gracefullyManaged = await HandleCustomSubStateAsync(_serverInfo, subState, _httpClient, cancellationToken);
             if (gracefullyManaged)
                 UpdateSubStateCache(subState);
+            else
+            {
+                // Custom handling rejected the update; retry so the sub-state doesn't go stale.
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                _statesToRequestQueue.Writer.TryWrite(subState);
+            }
         }
         finally
         {
@@ -426,7 +432,13 @@ internal class FactoryServerClient : IFactoryServerClient
             FactoryServerResponseContent<T> responseContent = await queryFunc(_httpClient);
 
             if (HandleResponseContentErrors(responseContent))
+            {
+                // The guard is still in place, so re-queue the query after a short backoff
+                // to avoid leaving this sub-state stale forever.
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                _statesToRequestQueue.Writer.TryWrite(subState);
                 return;
+            }
 
             UpdateServerSubState(subState, responseContent.Data!);
             ServerStateChanged?.Invoke(this, new FactoryServerStateChangedEventArgs(_serverInfo));
