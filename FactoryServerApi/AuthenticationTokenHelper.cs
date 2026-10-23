@@ -1,5 +1,6 @@
 ﻿using System.Buffers;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace FactoryServerApi;
 
@@ -49,6 +50,9 @@ public static class AuthenticationTokenHelper
 
     private readonly struct AuthenticationTokenPayload
     {
-        public FactoryServerPrivilegeLevel PL { get; }
+        // The server serializes the payload as { "pl": "<LevelName>" }.
+        // Needs a settable (init) accessor for System.Text.Json to populate it.
+        [JsonPropertyName("pl")]
+        public FactoryServerPrivilegeLevel PL { get; init; }
     }
 }
