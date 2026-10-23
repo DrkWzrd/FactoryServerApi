@@ -258,7 +258,12 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
             throw new InvalidOperationException("No content found in response when content was expected.");
 
-        if (response.Content.Headers.ContentType?.MediaType?.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) != true)
+        string? mediaType = response.Content.Headers.ContentType?.MediaType;
+        if (string.IsNullOrEmpty(mediaType))
+            throw new InvalidDataException(
+                $"The server returned an empty body (status {(int)response.StatusCode}) where 'application/json' content was expected.");
+
+        if (mediaType.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) != true)
         {
             throw new InvalidOperationException(
                 $"Unexpected response content media type: '{response.Content.Headers.ContentType}'. " +
@@ -273,10 +278,12 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
 
     private static async Task<FactoryServerError?> HandleMaybeVoidResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken = default)
     {
-        if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+        // 201 Created, 202 Accepted and 204 No Content can all arrive with an empty body on success.
+        string? mediaType = response.Content.Headers.ContentType?.MediaType;
+        if (string.IsNullOrEmpty(mediaType))
             return null;
 
-        if (response.Content.Headers.ContentType?.MediaType?.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) != true)
+        if (mediaType.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) != true)
         {
             throw new InvalidOperationException(
                 $"Unexpected response content media type: '{response.Content.Headers.ContentType}'. " +
@@ -286,7 +293,8 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         FactoryServerError result = await response.Content.ReadFromJsonAsync<FactoryServerError>(cancellationToken)
             ?? throw new InvalidDataException("Unexpected response data from server.");
 
-        return result;
+        // A 200 success response without an error code is not an error.
+        return string.IsNullOrEmpty(result.ErrorCode) ? null : result;
     }
 
     private static async Task<FactoryServerResponseContent<DownloadSaveGameData>> HandleMaybeOctetResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken = default)
