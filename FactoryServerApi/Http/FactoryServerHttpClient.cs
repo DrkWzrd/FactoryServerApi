@@ -302,9 +302,10 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
             throw new InvalidOperationException("No content found in response when content was expected.");
 
-        Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        if (response.Content.Headers.ContentType?.MediaType == MediaTypeNames.Application.Octet)
+        // Per the API docs, file responses are distinguished by the presence of a Content-Disposition header.
+        if (response.Content.Headers.ContentDisposition is not null)
         {
+            Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             DownloadSaveGameData data = new(stream);
             return new FactoryServerResponseContent<DownloadSaveGameData>()
             {
