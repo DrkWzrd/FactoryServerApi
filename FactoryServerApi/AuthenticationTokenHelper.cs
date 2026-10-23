@@ -11,6 +11,8 @@ public static class AuthenticationTokenHelper
             return FactoryServerPrivilegeLevel.NotAuthenticated;
 
         int splitPoint = authenticationToken.Value.Span.IndexOf('.');
+        if (splitPoint <= 0)
+            return FactoryServerPrivilegeLevel.NotAuthenticated;
 
         ReadOnlySpan<char> tokenPayloadBase64 = authenticationToken.Value.Span[..splitPoint];
 
@@ -23,7 +25,7 @@ public static class AuthenticationTokenHelper
         try
         {
             if (!Convert.TryFromBase64Chars(tokenPayloadBase64, tokenPayloadBytes, out int bytesLength))
-                throw new InvalidDataException("Token payload was invalid.");
+                return FactoryServerPrivilegeLevel.NotAuthenticated;
 
             tokenPayloadBytes = tokenPayloadBytes[..bytesLength];
 
@@ -32,6 +34,11 @@ public static class AuthenticationTokenHelper
             AuthenticationTokenPayload payload = JsonSerializer.Deserialize<AuthenticationTokenPayload>(ref payloadReader);
 
             return payload.PL;
+        }
+        catch (Exception)
+        {
+            // A property getter must not throw: a malformed token is simply "not authenticated".
+            return FactoryServerPrivilegeLevel.NotAuthenticated;
         }
         finally
         {

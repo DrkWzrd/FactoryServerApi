@@ -21,6 +21,7 @@ internal class FactoryServerClient : IFactoryServerClient
 
 
     private readonly ConcurrentDictionary<FactoryServerSubStateId, ushort> _cachedSubStatesVersions;
+    private FactoryServerStateUdpResponse? _lastProcessedState;
 
     public event EventHandler<FactoryServerErrorEventArgs>? ErrorOccurred;
     public event EventHandler<FactoryServerStateChangedEventArgs>? ServerStateChanged;
@@ -204,6 +205,30 @@ internal class FactoryServerClient : IFactoryServerClient
         return new(false, initialAdminTryResponse.Data!.AuthenticationToken, null);
     }
 
+    private static bool IsSameServerState(FactoryServerStateUdpResponse? previous, FactoryServerStateUdpResponse current)
+    {
+        if (previous is null)
+            return false;
+
+        if (previous.ServerState != current.ServerState
+            || previous.ServerNetCL != current.ServerNetCL
+            || previous.ServerFlags != current.ServerFlags
+            || previous.ServerName != current.ServerName)
+            return false;
+
+        IReadOnlyList<FactoryServerSubState> previousSubStates = previous.SubStates;
+        IReadOnlyList<FactoryServerSubState> currentSubStates = current.SubStates;
+        if (previousSubStates.Count != currentSubStates.Count)
+            return false;
+
+        for (int i = 0; i < previousSubStates.Count; i++)
+            if (previousSubStates[i].SubStateId != currentSubStates[i].SubStateId
+                || previousSubStates[i].SubStateVersion != currentSubStates[i].SubStateVersion)
+                return false;
+
+        return true;
+    }
+
     private void UdpClient_ErrorOccurred(object? sender, Exception e)
     {
         FactoryServerErrorEventArgs args = new(e);
@@ -242,6 +267,7 @@ internal class FactoryServerClient : IFactoryServerClient
                 {
                     try
                     {
+                        _lastProcessedState = e;
                         await HandleFirstTimeServerQueries(e);
                     }
                     finally
@@ -258,6 +284,14 @@ internal class FactoryServerClient : IFactoryServerClient
                     ErrorOccurred?.Invoke(this, new FactoryServerErrorEventArgs(new NotSupportedException("Server and client CL version differ.")));
                     return;
                 }
+
+                // If nothing in the UDP state changed since the last response (only the
+                // cookie differs), skip the HTTP round-trips and the change event.
+                bool stateUnchanged = IsSameServerState(_lastProcessedState, e);
+                _lastProcessedState = e;
+
+                if (stateUnchanged)
+                    return;
 
                 await UpdateCurrentStateAsync(e);
 
