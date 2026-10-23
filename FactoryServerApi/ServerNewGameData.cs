@@ -8,6 +8,7 @@ public class ServerNewGameData
     public MapName? MapName { get; set; }
     public StartingLocation? StartingLocation { get; set; }
 
+    // The docs say the field is "SkipOnboarding", but the server actually expects "bSkipOnboarding".
     [JsonPropertyName("bSkipOnboarding")]
     public bool SkipOnboarding { get; set; } = true;
     public Dictionary<string, string> AdvancedGameSettings { get; }
