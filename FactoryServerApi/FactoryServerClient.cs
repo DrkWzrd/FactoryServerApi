@@ -394,6 +394,22 @@ internal class FactoryServerClient : IFactoryServerClient
             if (sessionsResponse != null && !HandleResponseContentErrors(sessionsResponse))
                 _serverInfo.UpdateValue(sessionsResponse.Data!);
 
+            // Cache the sub-state versions that were just fetched successfully,
+            // so they don't get immediately re-queried on the next UDP response.
+            foreach (FactoryServerSubState subState in response.SubStates)
+            {
+                object? fetched = subState.SubStateId switch
+                {
+                    FactoryServerSubStateId.ServerGameState => queryServerStateResponse,
+                    FactoryServerSubStateId.ServerOptions => optionsResponse,
+                    FactoryServerSubStateId.AdvancedGameSettings => advancedSettingsResponse,
+                    FactoryServerSubStateId.SaveCollection => sessionsResponse,
+                    _ => null,
+                };
+                if (fetched is not null)
+                    _cachedSubStatesVersions[subState.SubStateId] = subState.SubStateVersion;
+            }
+
             ServerStateChanged?.Invoke(this, new FactoryServerStateChangedEventArgs(_serverInfo));
         }
         finally
