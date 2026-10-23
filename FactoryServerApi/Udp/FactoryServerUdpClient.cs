@@ -15,8 +15,11 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
     private readonly IPEndPoint _serverEndPoint;
     private readonly UdpOptions _options;
 
+    private static readonly TimeSpan CookieTtl = TimeSpan.FromSeconds(60);
+
     private CancellationTokenSource _pollingStopTokenSource = new();
-    private readonly ConcurrentDictionary<ulong, bool> _sentCookies = [];
+    private readonly ConcurrentDictionary<ulong, DateTimeOffset> _sentCookies = [];
+    private long _pollCookieCounter;
 
     private volatile bool _isListening;
     private volatile bool _isRunning;
@@ -48,7 +51,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
             linkedCts = CancellationTokenSource.CreateLinkedTokenSource(linkedCts.Token, durationCts.Token);
         }
 
-        return StartPollingPrivateAsync(cookieGenerator, linkedCts.Token);
+        return StartPollingPrivateAsync(cookieGenerator, linkedCts);
     }
 
     public Task StopPollingAsync()
@@ -60,12 +63,13 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
         return _pollingStopTokenSource.CancelAsync();
     }
 
-    private async Task StartPollingPrivateAsync(ICookieGenerator? cookieGenerator, CancellationToken ct)
+    private async Task StartPollingPrivateAsync(ICookieGenerator? cookieGenerator, CancellationTokenSource linkedCts)
     {
+        CancellationToken ct = linkedCts.Token;
         _isRunning = true;
 
         if (!_isListening)
-            _ = StartListeningPrivateAsync(ct);
+            _ = StartListeningPrivateAsync(linkedCts);
 
         await Task.Delay(500, ct);
 
@@ -94,8 +98,9 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
         }
     }
 
-    private async Task StartListeningPrivateAsync(CancellationToken ct)
+    private async Task StartListeningPrivateAsync(CancellationTokenSource cts)
     {
+        CancellationToken ct = cts.Token;
         _isListening = true;
         int attempt = 1;
 
@@ -113,6 +118,9 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
                 if (attempt++ > _options.TimeoutRetriesBeforeStop)
                 {
                     EmitError(new TimeoutException($"No server response after {attempt - 1} attempts (~{(_options.DelayBetweenPolls * attempt).TotalSeconds:N0}s)."));
+                    // The server is unreachable: stop the poll loop as well
+                    // to avoid pinging a dead server indefinitely (anti-DDoS).
+                    cts.Cancel();
                     break;
                 }
             }
@@ -161,7 +169,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
 
         ulong cookie = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(4, 8));
 
-        if (!_sentCookies.TryRemove(cookie, out _))
+        if (!_sentCookies.TryRemove(cookie, out DateTimeOffset sentAt) || now - sentAt > CookieTtl)
         {
             HandleInvalid(throwEx, "Unexpected cookie");
             return;
@@ -198,13 +206,14 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
         messageSpan[2] = (byte)FactoryServerUdpMessageType.PollServerState;
         messageSpan[3] = _options.ProtocolVersion;
 
-        cookie ??= (ulong)_tProvider.GetUtcNow().Ticks;
+        cookie ??= (ulong)Interlocked.Increment(ref _pollCookieCounter);
         BinaryPrimitives.WriteUInt64LittleEndian(messageSpan.Slice(4, 8), cookie.Value);
         messageSpan[^1] = _options.MessageTermination;
 
         try
         {
-            _sentCookies.TryAdd(cookie.Value, true);
+            PruneStaleCookies();
+            _sentCookies.TryAdd(cookie.Value, _tProvider.GetUtcNow());
             await _client.SendAsync(message, _serverEndPoint, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -215,6 +224,14 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
         {
             ArrayPool<byte>.Shared.Return(messageRaw);
         }
+    }
+
+    private void PruneStaleCookies()
+    {
+        DateTimeOffset now = _tProvider.GetUtcNow();
+        foreach (KeyValuePair<ulong, DateTimeOffset> sentCookie in _sentCookies)
+            if (now - sentCookie.Value > CookieTtl)
+                _sentCookies.TryRemove(sentCookie.Key, out _);
     }
 
     private void EmitError(Exception ex) => ErrorOccurred?.Invoke(this, ex);
