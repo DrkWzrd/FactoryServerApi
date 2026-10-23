@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net.Sockets;
 using System.Threading.Channels;
 using FactoryServerApi.Http;
@@ -248,12 +249,13 @@ internal class FactoryServerClient : IFactoryServerClient
     }
 
     private int _isInitializing;
+    private volatile bool _firstTimeQueriesDone;
 
     private async void InternalServerStateHandler(object? sender, FactoryServerStateUdpResponse e)
     {
         try
         {
-            if (_serverInfo.ServerState == FactoryServerState.Offline)
+            if (!_firstTimeQueriesDone)
             {
                 if (Interlocked.CompareExchange(ref _isInitializing, 1, 0) == 0)
                 {
@@ -348,6 +350,24 @@ internal class FactoryServerClient : IFactoryServerClient
             }
         }
 
+        // Record the UDP state immediately, even if the HTTP queries fail below.
+        await _currentServerStateSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            _serverInfo.UpdateValue(response);
+        }
+        finally
+        {
+            _currentServerStateSemaphore.Release();
+        }
+
+        // While the server is loading a map, the HTTP API is unavailable.
+        if (response.ServerState == FactoryServerState.Loading)
+        {
+            _firstTimeQueriesDone = true;
+            return;
+        }
+
         var healthTask = _httpClient.HealthCheckAsync(null, cancellationToken);
 
         var queryStateTask = TryAwaitRequest(_httpClient.QueryServerStateAsync(cancellationToken));
@@ -356,6 +376,14 @@ internal class FactoryServerClient : IFactoryServerClient
         var sessionsTask = TryAwaitRequest(_httpClient.EnumerateSessionsAsync(cancellationToken));
 
         FactoryServerResponseContent<HealthCheckData> healthResponse = await healthTask;
+
+        if (healthResponse.Error is not null || healthResponse.Data is null)
+        {
+            // The HTTP API is not (yet) reachable. Don't treat this as a hard failure:
+            // the queries will be retried on the next UDP response.
+            Debug.WriteLine($"FactoryServerApi: initial health check failed ({healthResponse.Error?.ErrorCode}); will retry.");
+            return;
+        }
 
         await Task.WhenAll(queryStateTask, optionsTask, advancedSettingsTask, sessionsTask);
 
@@ -367,12 +395,7 @@ internal class FactoryServerClient : IFactoryServerClient
         await _currentServerStateSemaphore.WaitAsync(cancellationToken);
         try
         {
-            _serverInfo.UpdateValue(response);
-
-            if (HandleResponseContentErrors(healthResponse))
-                throw new InvalidOperationException("Something happened to http server.");
-            else
-                _serverInfo.UpdateValue(healthResponse.Data!);
+            _serverInfo.UpdateValue(healthResponse.Data!);
 
             if (queryServerStateResponse != null && !HandleResponseContentErrors(queryServerStateResponse))
                 _serverInfo.UpdateValue(queryServerStateResponse.Data!);
@@ -402,6 +425,7 @@ internal class FactoryServerClient : IFactoryServerClient
                     _cachedSubStatesVersions[subState.SubStateId] = subState.SubStateVersion;
             }
 
+            _firstTimeQueriesDone = true;
             ServerStateChanged?.Invoke(this, new FactoryServerStateChangedEventArgs(_serverInfo));
         }
         finally
