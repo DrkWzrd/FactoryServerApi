@@ -5,7 +5,11 @@ namespace FactoryServerApi;
 public class ServerNewGameData
 {
     public string SessionName { get; }
+
+    // Omitted when null: the server uses its default level / a random starting location.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public MapName? MapName { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public StartingLocation? StartingLocation { get; set; }
 
     // The docs say the field is "SkipOnboarding", but the server actually expects "bSkipOnboarding".
