@@ -192,10 +192,15 @@ internal class FactoryServerClient : IFactoryServerClient
     private async Task<ClaimCheck> CheckIfServerIsClaimed(CancellationToken cancellationToken = default)
     {
         FactoryServerResponseContent<LoginData> initialAdminTryResponse = await _httpClient.PasswordlessLoginAsync(FactoryServerPrivilegeLevel.InitialAdmin, cancellationToken);
+        FactoryServerError? error = initialAdminTryResponse.Error;
+        // Only "passwordless_login_not_possible" means the server is already claimed;
+        // any other error is a real failure.
+        if (error is not null && error.ErrorCode == "passwordless_login_not_possible")
+            return new(true, null, error);
+
         if (HandleResponseContentErrors(initialAdminTryResponse))
-        {
-            return new(true, null, initialAdminTryResponse.Error); //If we can't, the server is claimed
-        }
+            throw new InvalidOperationException($"Failed to check if the server is claimed. Error: {error?.ErrorCode} - {error?.ErrorMessage}");
+
         return new(false, initialAdminTryResponse.Data!.AuthenticationToken, null);
     }
 
