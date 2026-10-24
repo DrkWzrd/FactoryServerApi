@@ -1,10 +1,10 @@
-﻿using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Net.Mime;
 using FactoryServerApi.Http.Requests.Contents;
 using FactoryServerApi.Http.Responses;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Net.Mime;
 
 namespace FactoryServerApi.Http;
 
@@ -69,9 +69,18 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         return await ExecuteRequestWithEnsuredJsonResponse<HealthCheckData>(content, cancellationToken);
     }
 
-    public async Task<FactoryServerError?> VerifyAuthenticationTokenAsync(CancellationToken cancellationToken = default)
+    public async Task<FactoryServerError?> VerifyAuthenticationTokenAsync(string? authenticationToken = null, CancellationToken cancellationToken = default)
     {
-        VerifyAuthenticationTokenRequestContent content = new();
+        // The live server requires the token and a privilege level in the request
+        // body (the API docs predate this requirement). Default to the stored token.
+        if (authenticationToken is null)
+            lock (_stateLock)
+                authenticationToken = AuthenticationToken;
+
+        if (authenticationToken is null)
+            throw new InvalidOperationException("No authentication token to verify.");
+
+        VerifyAuthenticationTokenRequestContent content = new(authenticationToken);
         return await ExecuteMaybeVoidRequestAsync(content, cancellationToken);
     }
 

@@ -1,10 +1,10 @@
-﻿using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Net.Sockets;
-using System.Threading.Channels;
 using FactoryServerApi.Http;
 using FactoryServerApi.Http.Responses;
 using FactoryServerApi.Udp;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Net.Sockets;
+using System.Threading.Channels;
 
 namespace FactoryServerApi;
 
@@ -17,7 +17,7 @@ internal class FactoryServerClient : IFactoryServerClient
     private readonly Channel<FactoryServerSubState> _statesToRequestQueue;
     private readonly ConcurrentDictionary<FactoryServerSubStateId, ulong> _subStateIdsQueriesUniquenessGuard;
     private readonly SemaphoreSlim _currentServerStateSemaphore;
-    private readonly FactoryServerInfo _serverInfo;
+    private FactoryServerInfo _serverInfo;
     private ulong _pingUdpCounter;
 
 
@@ -122,7 +122,7 @@ internal class FactoryServerClient : IFactoryServerClient
     {
         if (_httpClient.AuthenticationToken is not null)
         {
-            FactoryServerError? verifyError = await _httpClient.VerifyAuthenticationTokenAsync(cancellationToken);
+            FactoryServerError? verifyError = await _httpClient.VerifyAuthenticationTokenAsync(cancellationToken: cancellationToken);
             return verifyError is null;
         }
         return false;

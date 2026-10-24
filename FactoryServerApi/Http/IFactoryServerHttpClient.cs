@@ -1,4 +1,4 @@
-﻿using FactoryServerApi.Http.Responses;
+using FactoryServerApi.Http.Responses;
 
 namespace FactoryServerApi.Http;
 
@@ -21,7 +21,7 @@ public interface IFactoryServerHttpClient
 
     Task<FactoryServerResponseContent<LoginData>> PasswordLoginAsync(FactoryServerPrivilegeLevel minimumPrivilegeLevel, ReadOnlyMemory<char> password, CancellationToken cancellationToken = default);
 
-    Task<FactoryServerError?> VerifyAuthenticationTokenAsync(CancellationToken cancellationToken = default);
+    Task<FactoryServerError?> VerifyAuthenticationTokenAsync(string? authenticationToken = null, CancellationToken cancellationToken = default);
 
     Task<FactoryServerResponseContent<QueryServerStateData>> QueryServerStateAsync(CancellationToken cancellationToken = default);
 

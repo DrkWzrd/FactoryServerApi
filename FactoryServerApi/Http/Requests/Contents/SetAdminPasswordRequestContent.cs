@@ -10,7 +10,8 @@ internal class SetAdminPasswordRequestContent : FactoryServerRequestContent
 
         Dictionary<string, object> dict = new()
         {
-            {"Password", password },
+            // Serialize as a string; a raw ReadOnlyMemory<char> would be encoded as a char array.
+            {"Password", password.ToString() },
             {"AuthenticationToken", authenticationToken },
         };
         Data = new FactoryServerRequestContentData(dict);
