@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
 namespace FactoryServerApiNew.Http.Responses;
@@ -13,6 +14,11 @@ public class FactoryServerResponseContent<T> where T : FactoryServerResponseCont
     }
 
     public T? Data { get; init; }
+
+    [JsonIgnore]
+    [MemberNotNullWhen(true, nameof(Data))]
+    [MemberNotNullWhen(false, nameof(Error))]
+    public bool IsSuccess => Error is null;
 
     [JsonInclude]
     private string? ErrorCode { get; init; }
