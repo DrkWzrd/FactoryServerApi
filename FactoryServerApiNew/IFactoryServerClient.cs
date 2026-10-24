@@ -26,11 +26,6 @@ public interface IFactoryServerClient : IDisposable
     event EventHandler<Exception>? ErrorOccurred;
 
     /// <summary>
-    /// The UDP Lightweight Query access point, for continuous state polling.
-    /// </summary>
-    IFactoryServerUdpClient Udp { get; }
-
-    /// <summary>
     /// The privilege level granted by the current authentication token.
     /// </summary>
     FactoryServerPrivilegeLevel CurrentPrivilegeLevel { get; }
@@ -157,8 +152,6 @@ internal class FactoryServerClient : IFactoryServerClient
     private readonly IFactoryServerUdpClient _udp;
     private ReadOnlyMemory<char>? _adminPassword;
     private volatile FactoryServerStateUdpResponse? _currentServerState;
-
-    public IFactoryServerUdpClient Udp => _udp;
 
     public FactoryServerPrivilegeLevel CurrentPrivilegeLevel => AuthenticationTokenHelper.GetTokenLevel(_http.AuthenticationToken?.AsMemory());
 
