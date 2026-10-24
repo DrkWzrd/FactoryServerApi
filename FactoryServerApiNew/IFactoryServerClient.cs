@@ -15,6 +15,17 @@ namespace FactoryServerApiNew;
 public interface IFactoryServerClient : IDisposable
 {
     /// <summary>
+    /// Raised for every server state received while UDP polling is active.
+    /// </summary>
+    event EventHandler<FactoryServerStateUdpResponse>? ServerStateReceived;
+
+    /// <summary>
+    /// Raised when the UDP endpoint encounters an error, e.g. no server response
+    /// after a number of attempts.
+    /// </summary>
+    event EventHandler<Exception>? ErrorOccurred;
+
+    /// <summary>
     /// The UDP Lightweight Query access point, for continuous state polling.
     /// </summary>
     IFactoryServerUdpClient Udp { get; }
@@ -23,6 +34,21 @@ public interface IFactoryServerClient : IDisposable
     /// The privilege level granted by the current authentication token.
     /// </summary>
     FactoryServerPrivilegeLevel CurrentPrivilegeLevel { get; }
+
+    /// <summary>
+    /// The last server state received via UDP, if any.
+    /// </summary>
+    FactoryServerStateUdpResponse? CurrentServerState { get; }
+
+    // --- Polling ---
+
+    /// <summary>
+    /// Starts continuous UDP state polling. Raises <see cref="ServerStateReceived"/>
+    /// for every response and <see cref="ErrorOccurred"/> on failure.
+    /// </summary>
+    Task StartPollingAsync(CancellationToken cancellationToken = default);
+
+    Task StopPollingAsync();
 
     /// <summary>
     /// The player ID currently set for join/encryption ticket requests, if any.
@@ -130,6 +156,7 @@ internal class FactoryServerClient : IFactoryServerClient
     private readonly IFactoryServerHttpClient _http;
     private readonly IFactoryServerUdpClient _udp;
     private ReadOnlyMemory<char>? _adminPassword;
+    private volatile FactoryServerStateUdpResponse? _currentServerState;
 
     public IFactoryServerUdpClient Udp => _udp;
 
@@ -137,10 +164,17 @@ internal class FactoryServerClient : IFactoryServerClient
 
     public FactoryGamePlayerId? PlayerId => _http.PlayerId;
 
+    public FactoryServerStateUdpResponse? CurrentServerState => _currentServerState;
+
+    public event EventHandler<FactoryServerStateUdpResponse>? ServerStateReceived;
+    public event EventHandler<Exception>? ErrorOccurred;
+
     internal FactoryServerClient(IFactoryServerHttpClient httpClient, IFactoryServerUdpClient udpClient)
     {
         _http = httpClient;
         _udp = udpClient;
+        _udp.ServerStateReceived += Udp_ServerStateReceived;
+        _udp.ErrorOccurred += Udp_ErrorOccurred;
     }
 
     // --- Authentication ---
@@ -227,6 +261,20 @@ internal class FactoryServerClient : IFactoryServerClient
 
     public Task ClearPlayerIdAsync(CancellationToken cancellationToken = default)
         => _http.ClearPlayerIdAsync(cancellationToken);
+
+    public Task StartPollingAsync(CancellationToken cancellationToken = default)
+        => _udp.StartPollingAsync(cancellationToken: cancellationToken);
+
+    public Task StopPollingAsync()
+        => _udp.StopPollingAsync();
+
+    private void Udp_ServerStateReceived(object? sender, FactoryServerStateUdpResponse response)
+    {
+        _currentServerState = response;
+        ServerStateReceived?.Invoke(this, response);
+    }
+
+    private void Udp_ErrorOccurred(object? sender, Exception ex) => ErrorOccurred?.Invoke(this, ex);
 
     // --- Server state ---
 
@@ -445,5 +493,10 @@ internal class FactoryServerClient : IFactoryServerClient
         }
     }
 
-    public void Dispose() => _udp.Dispose();
+    public void Dispose()
+    {
+        _udp.ServerStateReceived -= Udp_ServerStateReceived;
+        _udp.ErrorOccurred -= Udp_ErrorOccurred;
+        _udp.Dispose();
+    }
 }
