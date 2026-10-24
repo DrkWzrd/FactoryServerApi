@@ -4,6 +4,14 @@ namespace FactoryServerApiNew.Http.Responses;
 
 public class FactoryServerResponseContent<T> where T : FactoryServerResponseContentData
 {
+    internal FactoryServerResponseContent(T? data = default, FactoryServerError? error = null)
+    {
+        Data = data;
+        ErrorCode = error?.ErrorCode;
+        ErrorMessage = error?.ErrorMessage;
+        ErrorData = error?.ErrorData;
+    }
+
     public T? Data { get; init; }
 
     [JsonInclude]
