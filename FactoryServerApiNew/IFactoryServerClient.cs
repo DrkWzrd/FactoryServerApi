@@ -113,6 +113,13 @@ public interface IFactoryServerClient : IDisposable
 
     Task<bool> GetIsAuthenticationTokenValidAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Ensures the client is authenticated with Administrator (or API token)
+    /// privileges, re-login with the last admin password used if needed.
+    /// Returns true if the client has admin privileges afterwards.
+    /// </summary>
+    Task<bool> EnsureAdminAuthenticationAsync(CancellationToken cancellationToken = default);
+
     Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default);
 
     Task ClearPlayerIdAsync(CancellationToken cancellationToken = default);
@@ -298,6 +305,9 @@ internal class FactoryServerClient : IFactoryServerClient
 
         return await _http.VerifyAuthenticationTokenAsync(cancellationToken: cancellationToken) is null;
     }
+
+    public async Task<bool> EnsureAdminAuthenticationAsync(CancellationToken cancellationToken = default)
+        => await EnsureAdminAsync(cancellationToken) is null;
 
     public Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default)
         => _http.SetPlayerIdAsync(playerId, cancellationToken);

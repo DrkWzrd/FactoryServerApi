@@ -13,6 +13,13 @@ public interface IFactoryServerClientFactory
     /// can be passed to authenticate as a third party application without logging in.
     /// </summary>
     Task<IFactoryServerClient> BuildFactoryServerClientAsync(string host, int port, string? apiToken = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Builds a high-level <see cref="FactoryServerSession"/> wrapper around the
+    /// client that owns the login flow: its <see cref="IFactoryServerClient.InitializeAsync"/>
+    /// claims an unclaimed server and guarantees Administrator authentication.
+    /// </summary>
+    Task<FactoryServerSession> BuildFactoryServerSessionAsync(string host, int port, FactoryServerCredentialPrompt prompt, string? apiToken = null, CancellationToken cancellationToken = default);
 }
 
 internal class FactoryServerClientFactory : IFactoryServerClientFactory
@@ -32,5 +39,11 @@ internal class FactoryServerClientFactory : IFactoryServerClientFactory
         IFactoryServerHttpClient http = await httpFactory.BuildFactoryServerHttpClientAsync(host, port, apiToken, cancellationToken);
 
         return new FactoryServerClient(http, udp, host, port);
+    }
+
+    public async Task<FactoryServerSession> BuildFactoryServerSessionAsync(string host, int port, FactoryServerCredentialPrompt prompt, string? apiToken = null, CancellationToken cancellationToken = default)
+    {
+        IFactoryServerClient client = await BuildFactoryServerClientAsync(host, port, apiToken, cancellationToken);
+        return new FactoryServerSession(client, prompt);
     }
 }
