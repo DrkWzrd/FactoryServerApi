@@ -9,5 +9,9 @@ public interface IFactoryServerUdpClient : IDisposable
     Task SendPollingMessageAsync(ulong? cookie = null, CancellationToken cancellationToken = default);
     Task StartPollingAsync(TimeSpan duration = default, ICookieGenerator? cookieGenerator = null, CancellationToken cancellationToken = default);
     Task StopPollingAsync();
-    Task ReceiveMessageAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Waits for the next valid server state response and returns it.
+    /// Throws <see cref="InvalidDataException"/> if an invalid message is received.
+    /// </summary>
+    Task<FactoryServerStateUdpResponse> ReceiveMessageAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
 }
