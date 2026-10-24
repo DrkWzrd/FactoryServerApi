@@ -26,12 +26,6 @@ public interface IFactoryServerClient : IDisposable
     event EventHandler<Exception>? ErrorOccurred;
 
     /// <summary>
-    /// Raised when the server's claim state changes. Claiming is irreversible
-    /// by the client side, so the state only transitions from unclaimed to claimed.
-    /// </summary>
-    event EventHandler<FactoryServerClaimStateChangedEventArgs>? ClaimStateChanged;
-
-    /// <summary>
     /// The privilege level granted by the current authentication token.
     /// </summary>
     FactoryServerPrivilegeLevel CurrentPrivilegeLevel { get; }
@@ -192,7 +186,6 @@ internal class FactoryServerClient : IFactoryServerClient
 
     public event EventHandler<FactoryServerStateUdpResponse>? ServerStateReceived;
     public event EventHandler<Exception>? ErrorOccurred;
-    public event EventHandler<FactoryServerClaimStateChangedEventArgs>? ClaimStateChanged;
 
     internal FactoryServerClient(IFactoryServerHttpClient httpClient, IFactoryServerUdpClient udpClient, string host, int port)
     {
@@ -220,7 +213,6 @@ internal class FactoryServerClient : IFactoryServerClient
             return;
         _isClaimed = isClaimed;
         PersistClaimState();
-        ClaimStateChanged?.Invoke(this, new FactoryServerClaimStateChangedEventArgs(isClaimed));
     }
 
     // --- Authentication ---
