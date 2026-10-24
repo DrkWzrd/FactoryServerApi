@@ -26,6 +26,12 @@ public interface IFactoryServerClient : IDisposable
     event EventHandler<Exception>? ErrorOccurred;
 
     /// <summary>
+    /// Raised when the server's claim state changes. Claiming is irreversible
+    /// by the client side, so the state only transitions from unclaimed to claimed.
+    /// </summary>
+    event EventHandler<FactoryServerClaimStateChangedEventArgs>? ClaimStateChanged;
+
+    /// <summary>
     /// The privilege level granted by the current authentication token.
     /// </summary>
     FactoryServerPrivilegeLevel CurrentPrivilegeLevel { get; }
@@ -58,13 +64,17 @@ public interface IFactoryServerClient : IDisposable
     bool IsClaimed { get; }
 
     /// <summary>
-    /// Initializes the client: checks whether the server is claimed by attempting a
-    /// passwordless InitialAdmin login, stores the InitialAdmin token (if the server
-    /// is not claimed) for the later claim, and starts UDP state polling.
+    /// Initializes the client and claims the server if it is not yet claimed: a
+    /// passwordless InitialAdmin login is attempted and, on success, the server
+    /// is claimed with <paramref name="serverName"/> and <paramref name="adminPassword"/>.
+    /// If the claim fails, the InitialAdmin token is persisted so the admin can
+    /// finish the claim later with <see cref="ClaimServerAsync"/>.
+    /// If the server is already claimed, the admin password is remembered for
+    /// automatic re-login. Starts UDP state polling.
     /// Throws <see cref="InvalidOperationException"/> if the claim check fails for
     /// a reason other than the server already being claimed.
     /// </summary>
-    Task InitializeAsync(CancellationToken cancellationToken = default);
+    Task InitializeAsync(string serverName, ReadOnlyMemory<char> adminPassword, CancellationToken cancellationToken = default);
 
     // --- Authentication ---
 
@@ -182,6 +192,7 @@ internal class FactoryServerClient : IFactoryServerClient
 
     public event EventHandler<FactoryServerStateUdpResponse>? ServerStateReceived;
     public event EventHandler<Exception>? ErrorOccurred;
+    public event EventHandler<FactoryServerClaimStateChangedEventArgs>? ClaimStateChanged;
 
     internal FactoryServerClient(IFactoryServerHttpClient httpClient, IFactoryServerUdpClient udpClient, string host, int port)
     {
@@ -201,6 +212,15 @@ internal class FactoryServerClient : IFactoryServerClient
         _claimStore.InitialAdminToken = _initialAdminToken;
         _claimStore.AdminPassword = _adminPassword?.ToString();
         _claimStore.Save();
+    }
+
+    private void SetClaimed(bool isClaimed)
+    {
+        if (_isClaimed == isClaimed)
+            return;
+        _isClaimed = isClaimed;
+        PersistClaimState();
+        ClaimStateChanged?.Invoke(this, new FactoryServerClaimStateChangedEventArgs(isClaimed));
     }
 
     // --- Authentication ---
@@ -253,9 +273,8 @@ internal class FactoryServerClient : IFactoryServerClient
 
         // The server issues a new token: the InitialAdmin privilege must be dropped in favor of it.
         _initialAdminToken = null;
-        _isClaimed = true;
         _adminPassword = adminPassword;
-        PersistClaimState();
+        SetClaimed(true);
         await _http.SetAuthenticationTokenAsync(claimResult.Data.AuthenticationToken, cancellationToken);
         return true;
     }
@@ -293,20 +312,27 @@ internal class FactoryServerClient : IFactoryServerClient
     public Task ClearPlayerIdAsync(CancellationToken cancellationToken = default)
         => _http.ClearPlayerIdAsync(cancellationToken);
 
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    public async Task InitializeAsync(string serverName, ReadOnlyMemory<char> adminPassword, CancellationToken cancellationToken = default)
     {
         // Claiming is irreversible by the client side: if this client already claimed
         // the server, the persisted state says so and no check is needed.
-        if (!_isClaimed)
+        if (_isClaimed)
+        {
+            _adminPassword = adminPassword;
+            PersistClaimState();
+        }
+        else
         {
             // A passwordless InitialAdmin login is only possible while the server is
-            // not claimed. The token is persisted until the admin claims the server.
+            // not claimed.
             FactoryServerResponseContent<LoginData> initialAdminResult = await _http.PasswordlessLoginAsync(FactoryServerPrivilegeLevel.InitialAdmin, cancellationToken);
             if (initialAdminResult.Error is not null)
             {
                 if (initialAdminResult.Error.ErrorCode == "passwordless_login_not_possible")
                 {
-                    _isClaimed = true;
+                    // Claimed by someone else: remember the password for re-login.
+                    _adminPassword = adminPassword;
+                    SetClaimed(true);
                 }
                 else
                 {
@@ -315,10 +341,27 @@ internal class FactoryServerClient : IFactoryServerClient
             }
             else
             {
-                _initialAdminToken = initialAdminResult.Data!.AuthenticationToken;
-            }
+                string initialAdminToken = initialAdminResult.Data!.AuthenticationToken;
+                await _http.SetAuthenticationTokenAsync(initialAdminToken, cancellationToken);
 
-            PersistClaimState();
+                // Try to claim the server with the InitialAdmin token.
+                FactoryServerResponseContent<LoginData> claimResult = await _http.ClaimServerAsync(serverName, adminPassword, cancellationToken);
+                if (claimResult.Data is not null)
+                {
+                    // The server issues a new token: the InitialAdmin privilege must be dropped.
+                    _initialAdminToken = null;
+                    _adminPassword = adminPassword;
+                    SetClaimed(true);
+                    await _http.SetAuthenticationTokenAsync(claimResult.Data.AuthenticationToken, cancellationToken);
+                }
+                else
+                {
+                    // The claim failed: persist the InitialAdmin token (still valid) so
+                    // the admin can finish the claim later with ClaimServerAsync.
+                    _initialAdminToken = initialAdminToken;
+                    PersistClaimState();
+                }
+            }
         }
 
         await _udp.StartPollingAsync(cancellationToken: cancellationToken);
