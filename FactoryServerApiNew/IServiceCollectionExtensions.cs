@@ -70,7 +70,7 @@ public static class IServiceCollectionExtensions
         host.Services.AddKeyedSingleton("factoryServerLocalSystemTimeProvider", TimeProvider.System)
             .AddSingleton<IFactoryServerUdpClientFactory, FactoryServerUdpClientFactory>()
             .AddSingleton<IFactoryServerHttpClientFactory, FactoryServerHttpClientFactory>()
-            .AddSingleton<IFactoryServerApiClientFactory, FactoryServerApiClientFactory>();
+            .AddSingleton<IFactoryServerClientFactory, FactoryServerClientFactory>();
 
         return host;
     }
