@@ -207,14 +207,6 @@ internal class FactoryServerClient : IFactoryServerClient
         _claimStore.Save();
     }
 
-    private void SetClaimed(bool isClaimed)
-    {
-        if (_isClaimed == isClaimed)
-            return;
-        _isClaimed = isClaimed;
-        PersistClaimState();
-    }
-
     // --- Authentication ---
 
     public async Task<bool> AdministratorLoginAsync(ReadOnlyMemory<char> password, CancellationToken cancellationToken = default)
@@ -266,7 +258,8 @@ internal class FactoryServerClient : IFactoryServerClient
         // The server issues a new token: the InitialAdmin privilege must be dropped in favor of it.
         _initialAdminToken = null;
         _adminPassword = adminPassword;
-        SetClaimed(true);
+        _isClaimed = true;
+        PersistClaimState();
         await _http.SetAuthenticationTokenAsync(claimResult.Data.AuthenticationToken, cancellationToken);
         return true;
     }
@@ -324,7 +317,8 @@ internal class FactoryServerClient : IFactoryServerClient
                 {
                     // Claimed by someone else: remember the password for re-login.
                     _adminPassword = adminPassword;
-                    SetClaimed(true);
+                    _isClaimed = true;
+                    PersistClaimState();
                 }
                 else
                 {
@@ -343,7 +337,8 @@ internal class FactoryServerClient : IFactoryServerClient
                     // The server issues a new token: the InitialAdmin privilege must be dropped.
                     _initialAdminToken = null;
                     _adminPassword = adminPassword;
-                    SetClaimed(true);
+                    _isClaimed = true;
+                    PersistClaimState();
                     await _http.SetAuthenticationTokenAsync(claimResult.Data.AuthenticationToken, cancellationToken);
                 }
                 else
