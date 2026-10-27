@@ -148,7 +148,7 @@ public sealed class MainForm : Form
             Padding = new Padding(4)
         };
         Label addrLabel = new() { Text = "Server (host:port)", AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(4, 2, 4, 2) };
-        _address = new TextBox { Dock = DockStyle.Fill, Text = "127.0.0.1:7777", Margin = new Padding(4, 2, 4, 4) };
+        _address = new TextBox { Dock = DockStyle.Top, Height = 23, Text = "127.0.0.1:7777", Margin = new Padding(4, 2, 4, 4) };
         _connect = MakeButton("Connect", 100);
         _disconnect = MakeButton("Disconnect", 104);
         FlowLayoutPanel btnRow = new()
@@ -160,8 +160,9 @@ public sealed class MainForm : Form
         };
         btnRow.Controls.Add(_connect);
         btnRow.Controls.Add(_disconnect);
-        connGroup.Controls.Add(_address);
+        // Add in reverse visual order: last added docks topmost.
         connGroup.Controls.Add(btnRow);
+        connGroup.Controls.Add(_address);
         connGroup.Controls.Add(addrLabel);
 
         // Command tabs (one per section).
