@@ -62,7 +62,7 @@ public sealed class MainForm : Form
     private TabPage _tabSaves = null!;
     private TabPage _tabAdmin = null!;
 
-    private FactoryServerSession? _session;
+    private IFactoryServerClient? _client;
     private IServiceProvider? _services;
     private bool _busy;
     private string? _lastUdpState;
@@ -303,25 +303,39 @@ public sealed class MainForm : Form
         builder.Services.Configure<SslOptions>(o => o.ServerCertificateValidationStrategy = SslValidationStrategy.Custom);
         IServiceProvider app = builder.Services.BuildServiceProvider();
 
-        FactoryServerCredentialPrompt prompt = new(ClaimServerPrompt, AdminPasswordPrompt);
-        FactoryServerSession? session = null;
+        IFactoryServerClient? session = null;
         try
         {
             IFactoryServerClientFactory factory = app.GetRequiredService<IFactoryServerClientFactory>();
-            session = await factory.BuildFactoryServerSessionAsync(host, port, prompt);
+            session = await factory.BuildFactoryServerClientAsync(host, port);
             session.ServerStateReceived += OnServerStateReceived;
             session.ErrorOccurred += OnClientError;
 
             // Runs the whole workflow: claim check (prompting to create the admin
             // password when the server is unclaimed) and admin login.
             await session.InitializeAsync();
+            if (session.MustClaim)
+            {
+                (string serverName, ReadOnlyMemory<char> adminPassword) = await ClaimServerPrompt();
+                if (!await session.ClaimServerAsync(serverName, adminPassword))
+                    throw new InvalidOperationException("Failed to claim the server.");
+            }
+            if (session.CurrentPrivilegeLevel is not (FactoryServerPrivilegeLevel.Administrator or FactoryServerPrivilegeLevel.APIToken))
+            {
+                if (!await session.EnsureAdminAuthenticationAsync())
+                {
+                    ReadOnlyMemory<char> adminPassword = await AdminPasswordPrompt();
+                    if (!await session.AdministratorLoginAsync(adminPassword))
+                        throw new InvalidOperationException("Failed to log in as Administrator.");
+                }
+            }
 
-            _session = session;
+            _client = session;
             _services = app;
             session = null;
             app = null!;
             SetConnected(true);
-            SetStatus($"Connected to {host}:{port} — privilege: {_session.CurrentPrivilegeLevel.ToString()}, claimed: {_session.IsClaimed}");
+            SetStatus($"Connected to {host}:{port} — privilege: {_client.CurrentPrivilegeLevel.ToString()}, claimed: {_client.IsClaimed}");
         }
         catch (OperationCanceledException)
         {
@@ -339,7 +353,7 @@ public sealed class MainForm : Form
     /// Teardown runs off the UI thread: stopping the poll loop and closing a UDP
     /// socket that has an in-flight receive can block for seconds.
     /// </summary>
-    private void CleanupClient(FactoryServerSession? session, IServiceProvider? services)
+    private void CleanupClient(IFactoryServerClient? session, IServiceProvider? services)
     {
         if (session is null && services is null)
             return;
@@ -359,7 +373,7 @@ public sealed class MainForm : Form
 
     private async void OnDisconnect(object? sender, EventArgs e)
     {
-        FactoryServerSession? session = _session;
+        IFactoryServerClient? session = _client;
         IServiceProvider? services = _services;
         if (session is null)
             return;
@@ -367,7 +381,7 @@ public sealed class MainForm : Form
         // Detach from the UI's point of view immediately; the actual teardown
         // (stopping the poll loop, closing the socket) can block and must not
         // run on the UI thread.
-        _session = null;
+        _client = null;
         _services = null;
         SetConnected(false);
         SetBusy(true);
@@ -397,9 +411,9 @@ public sealed class MainForm : Form
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)
     {
-        FactoryServerSession? session = _session;
+        IFactoryServerClient? session = _client;
         IServiceProvider? services = _services;
-        _session = null;
+        _client = null;
         _services = null;
 
         // Best effort: the app is exiting, so don't wait for the teardown.
@@ -416,7 +430,7 @@ public sealed class MainForm : Form
         }
     }
 
-    // --- Credential prompts (invoked by the session on the UI thread) ---
+    // --- Credential prompts (invoked on the UI thread) ---
 
     private Task<(string ServerName, ReadOnlyMemory<char> AdminPassword)> ClaimServerPrompt()
     {
@@ -503,7 +517,7 @@ public sealed class MainForm : Form
     /// </summary>
     private async Task<Dictionary<string, object?>?> FetchSubStatesAsync(FactoryServerStateUdpResponse state)
     {
-        FactoryServerSession? session = _session;
+        IFactoryServerClient? session = _client;
         if (session is null || state.SubStates.Count == 0)
             return null;
         Dictionary<string, object?> subStates = new();
@@ -581,25 +595,25 @@ public sealed class MainForm : Form
     // --- Polling ---
 
     private void OnUdpStart(object? sender, EventArgs e)
-        => _ = Guard(() => _session!.StartPollingAsync());
+        => _ = Guard(() => _client!.StartPollingAsync());
 
     private void OnUdpStop(object? sender, EventArgs e)
-        => _ = Guard(() => _session!.StopPollingAsync());
+        => _ = Guard(() => _client!.StopPollingAsync());
 
     // --- Authentication ---
 
     private async void OnAdminLogin(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         char[]? password = Prompts.Password(this, "Admin login", "Admin password:");
         if (password is null)
             return;
 
-        if (await Guard(() => _session.AdministratorLoginAsync(password.AsMemory())))
+        if (await Guard(() => _client.AdministratorLoginAsync(password.AsMemory())))
         {
-            SetStatus($"Logged in — privilege: {_session.CurrentPrivilegeLevel.ToString()}");
+            SetStatus($"Logged in — privilege: {_client.CurrentPrivilegeLevel.ToString()}");
             UpdateVisibility();
         }
         else
@@ -610,7 +624,7 @@ public sealed class MainForm : Form
 
     private async void OnClientLogin(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         char[]? password = Prompts.Password(this, "Client login", "Client password (blank if none):");
@@ -618,9 +632,9 @@ public sealed class MainForm : Form
             return;
 
         ReadOnlyMemory<char>? pwd = password.Length == 0 ? null : password.AsMemory();
-        if (await Guard(() => _session.ClientLoginAsync(pwd)))
+        if (await Guard(() => _client.ClientLoginAsync(pwd)))
         {
-            SetStatus($"Client login OK — privilege: {_session.CurrentPrivilegeLevel.ToString()}");
+            SetStatus($"Client login OK — privilege: {_client.CurrentPrivilegeLevel.ToString()}");
             UpdateVisibility();
         }
         else
@@ -631,7 +645,7 @@ public sealed class MainForm : Form
 
     private async void OnClaim(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         string? name = Prompts.Input(this, "Claim server", "Server name:", "My Factory Server");
@@ -642,9 +656,9 @@ public sealed class MainForm : Form
         if (password is null)
             return;
 
-        if (await Guard(() => _session.ClaimServerAsync(name, password.AsMemory())))
+        if (await Guard(() => _client.ClaimServerAsync(name, password.AsMemory())))
         {
-            SetStatus($"Claimed — privilege: {_session.CurrentPrivilegeLevel.ToString()}, claimed: {_session.IsClaimed}");
+            SetStatus($"Claimed — privilege: {_client.CurrentPrivilegeLevel.ToString()}, claimed: {_client.IsClaimed}");
             UpdateVisibility();
         }
         else
@@ -655,7 +669,7 @@ public sealed class MainForm : Form
 
     private async void OnSetAdminPassword(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         char[]? password = Prompts.Password(this, "Set admin password", "New admin password:");
@@ -666,7 +680,7 @@ public sealed class MainForm : Form
         if (token is null || token.Length == 0)
             return;
 
-        if (await Guard(() => _session.SetAdminPasswordAsync(password.AsMemory(), token)))
+        if (await Guard(() => _client.SetAdminPasswordAsync(password.AsMemory(), token)))
         {
             SetStatus("Admin password updated.");
             UpdateVisibility();
@@ -679,37 +693,37 @@ public sealed class MainForm : Form
 
     private async void OnSetApiToken(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         string? token = Prompts.Input(this, "Set API token", "Authentication token:");
         if (token is null || token.Length == 0)
             return;
 
-        await Guard(() => _session.SetAuthenticationTokenAsync(token));
-        SetStatus($"API token set — privilege: {_session.CurrentPrivilegeLevel.ToString()}");
+        await Guard(() => _client.SetAuthenticationTokenAsync(token));
+        SetStatus($"API token set — privilege: {_client.CurrentPrivilegeLevel.ToString()}");
         UpdateVisibility();
     }
 
     private async void OnClearLogin(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
-        await Guard(() => _session.ClearLoginDataAsync());
-        SetStatus($"Login data cleared — privilege: {_session.CurrentPrivilegeLevel.ToString()}");
+        await Guard(() => _client.ClearLoginDataAsync());
+        SetStatus($"Login data cleared — privilege: {_client.CurrentPrivilegeLevel.ToString()}");
         UpdateVisibility();
     }
 
     private async void OnVerifyToken(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         SetBusy(true);
         try
         {
-            bool valid = await _session.GetIsAuthenticationTokenValidAsync();
+            bool valid = await _client.GetIsAuthenticationTokenValidAsync();
             Log($"Token valid: {valid}");
         }
         catch (Exception ex)
@@ -724,14 +738,14 @@ public sealed class MainForm : Form
 
     private async void OnEnsureAdmin(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         SetBusy(true);
         try
         {
-            bool ok = await _session.EnsureAdminAuthenticationAsync();
-            Log($"Ensure admin: {(ok ? "OK" : "failed")} — privilege: {_session.CurrentPrivilegeLevel.ToString()}");
+            bool ok = await _client.EnsureAdminAuthenticationAsync();
+            Log($"Ensure admin: {(ok ? "OK" : "failed")} — privilege: {_client.CurrentPrivilegeLevel.ToString()}");
             UpdateVisibility();
         }
         catch (Exception ex)
@@ -746,7 +760,7 @@ public sealed class MainForm : Form
 
     private async void OnSetPlayerId(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         string? text = Prompts.Input(this, "Set player ID", "Player ID (Steam ID64 or Epic hex):");
@@ -757,17 +771,17 @@ public sealed class MainForm : Form
             ? new FactoryGamePlayerId(steam)
             : new FactoryGamePlayerId(text);
 
-        await Guard(() => _session.SetPlayerIdAsync(id));
+        await Guard(() => _client.SetPlayerIdAsync(id));
         SetStatus($"Player ID set: {id}");
         UpdateVisibility();
     }
 
     private async void OnClearPlayerId(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
-        await Guard(() => _session.ClearPlayerIdAsync());
+        await Guard(() => _client.ClearPlayerIdAsync());
         SetStatus("Player ID cleared.");
         UpdateVisibility();
     }
@@ -776,13 +790,13 @@ public sealed class MainForm : Form
 
     private async void OnIsOnline(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         SetBusy(true);
         try
         {
-            bool online = await _session.GetIsServerOnlineAsync(TimeSpan.FromSeconds(5));
+            bool online = await _client.GetIsServerOnlineAsync(TimeSpan.FromSeconds(5));
             Log($"Server online: {online}");
         }
         catch (Exception ex)
@@ -797,13 +811,13 @@ public sealed class MainForm : Form
 
     private async void OnGetState(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         SetBusy(true);
         try
         {
-            FactoryServerStateUdpResponse? state = await _session.GetServerStateAsync();
+            FactoryServerStateUdpResponse? state = await _client.GetServerStateAsync();
             if (state is null)
                 Log("No UDP state received.");
             else
@@ -824,7 +838,7 @@ public sealed class MainForm : Form
 
     private async void OnHealthCheck(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         string? custom = Prompts.Input(this, "Health check", "Client custom data (optional):");
@@ -834,7 +848,7 @@ public sealed class MainForm : Form
         SetBusy(true);
         try
         {
-            FactoryServerResponseContent<HealthCheckData> result = await _session.HealthCheckAsync(custom.Length == 0 ? null : custom);
+            FactoryServerResponseContent<HealthCheckData> result = await _client.HealthCheckAsync(custom.Length == 0 ? null : custom);
             if (result.Data is not null)
                 Log($"Health: {result.Data.Health.ToString()} custom=\"{result.Data.ServerCustomData}\"");
             else
@@ -852,13 +866,13 @@ public sealed class MainForm : Form
 
     private async void OnQueryState(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         SetBusy(true);
         try
         {
-            FactoryServerResponseContent<QueryServerStateData> result = await _session.QueryServerStateAsync();
+            FactoryServerResponseContent<QueryServerStateData> result = await _client.QueryServerStateAsync();
             if (result.Data is not null)
                 Log("Query state: " + FormatGameState(result.Data.ServerGameState));
             else
@@ -876,13 +890,13 @@ public sealed class MainForm : Form
 
     private async void OnGetOptions(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         SetBusy(true);
         try
         {
-            FactoryServerResponseContent<GetServerOptionsData> result = await _session.GetServerOptionsAsync();
+            FactoryServerResponseContent<GetServerOptionsData> result = await _client.GetServerOptionsAsync();
             if (result.Data is not null)
                 Log("Server options: " + FormatDict(result.Data.ServerOptions));
             else
@@ -900,13 +914,13 @@ public sealed class MainForm : Form
 
     private async void OnGetAdvSettings(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         SetBusy(true);
         try
         {
-            FactoryServerResponseContent<GetAdvancedGameSettingsData> result = await _session.GetAdvancedGameSettingsAsync();
+            FactoryServerResponseContent<GetAdvancedGameSettingsData> result = await _client.GetAdvancedGameSettingsAsync();
             if (result.Data is not null)
                 Log($"Advanced settings (creative={result.Data.CreativeModeEnabled}): " + FormatDict(result.Data.AdvancedGameSettings));
             else
@@ -926,7 +940,7 @@ public sealed class MainForm : Form
 
     private async void OnCreateGame(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         string? name = Prompts.Input(this, "Create new game", "Session name:");
@@ -934,13 +948,13 @@ public sealed class MainForm : Form
             return;
 
         ServerNewGameData game = new(name) { SkipOnboarding = true };
-        if (await Guard(() => _session.CreateNewGameAsync(game)))
+        if (await Guard(() => _client.CreateNewGameAsync(game)))
             SetStatus($"New game requested: {name}");
     }
 
     private async void OnLoadGame(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         string? name = Prompts.Input(this, "Load game", "Save name:");
@@ -951,32 +965,32 @@ public sealed class MainForm : Form
         if (adv == DialogResult.Cancel)
             return;
 
-        if (await Guard(() => _session.LoadGameAsync(name, enableAdvancedGameSettings: adv == DialogResult.Yes)))
+        if (await Guard(() => _client.LoadGameAsync(name, enableAdvancedGameSettings: adv == DialogResult.Yes)))
             SetStatus($"Load requested: {name}");
     }
 
     private async void OnSaveGame(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         string? name = Prompts.Input(this, "Save game", "Save name:");
         if (name is null || name.Length == 0)
             return;
 
-        if (await Guard(() => _session.SaveGameAsync(name)))
+        if (await Guard(() => _client.SaveGameAsync(name)))
             SetStatus($"Save requested: {name}");
     }
 
     private async void OnEnumerateSaves(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         SetBusy(true);
         try
         {
-            FactoryServerResponseContent<EnumerateSessionsData> result = await _session.EnumerateSessionsAsync();
+            FactoryServerResponseContent<EnumerateSessionsData> result = await _client.EnumerateSessionsAsync();
             if (result.Data is not null)
             {
                 Log($"Saves ({result.Data.Sessions.Count} session(s)):");
@@ -1010,7 +1024,7 @@ public sealed class MainForm : Form
         SetBusy(true);
         try
         {
-            FactoryServerResponseContent<EnumerateSessionsData> result = await _session!.EnumerateSessionsAsync();
+            FactoryServerResponseContent<EnumerateSessionsData> result = await _client!.EnumerateSessionsAsync();
             if (result.Data is null)
             {
                 MessageBox.Show(this, $"{result.Error?.ErrorCode}: {result.Error?.ErrorMessage}", "Enumerate saves", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -1034,7 +1048,7 @@ public sealed class MainForm : Form
 
     private async void OnDownloadSave(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         // First ask the server what saves exist, then let the user pick one.
@@ -1052,7 +1066,7 @@ public sealed class MainForm : Form
         SetBusy(true);
         try
         {
-            FactoryServerResponseContent<DownloadSaveGameData> result = await _session.DownloadSaveGameAsync(name);
+            FactoryServerResponseContent<DownloadSaveGameData> result = await _client.DownloadSaveGameAsync(name);
             if (result.Data is null)
             {
                 MessageBox.Show(this, $"{result.Error?.ErrorCode}: {result.Error?.ErrorMessage}", "Download save", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -1083,7 +1097,7 @@ public sealed class MainForm : Form
 
     private async void OnUploadSave(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         using OpenFileDialog dialog = new()
@@ -1101,7 +1115,7 @@ public sealed class MainForm : Form
         try
         {
             using Stream stream = File.OpenRead(dialog.FileName);
-            FactoryServerError? error = await _session.UploadSaveGameAsync(name, loadSaveGame: false, enableAdvancedGameSettings: false, stream);
+            FactoryServerError? error = await _client.UploadSaveGameAsync(name, loadSaveGame: false, enableAdvancedGameSettings: false, stream);
             if (error is not null)
                 MessageBox.Show(this, $"{error.ErrorCode}: {error.ErrorMessage}", "Upload save", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             else
@@ -1119,7 +1133,7 @@ public sealed class MainForm : Form
 
     private async void OnDeleteSaveFile(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         EnumerateSessionsData? data = await EnumerateAsync();
@@ -1135,13 +1149,13 @@ public sealed class MainForm : Form
         if (MessageBox.Show(this, $"Delete save file \"{name}\"?", "Delete save file", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
-        if (await Guard(() => _session.DeleteSaveFileAsync(name)))
+        if (await Guard(() => _client.DeleteSaveFileAsync(name)))
             SetStatus($"Deleted save file: {name}");
     }
 
     private async void OnDeleteSaveSession(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         EnumerateSessionsData? data = await EnumerateAsync();
@@ -1157,13 +1171,13 @@ public sealed class MainForm : Form
         if (MessageBox.Show(this, $"Delete save session \"{name}\"?", "Delete save session", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
-        if (await Guard(() => _session.DeleteSaveSessionAsync(name)))
+        if (await Guard(() => _client.DeleteSaveSessionAsync(name)))
             SetStatus($"Deleted save session: {name}");
     }
 
     private async void OnSetAutoLoadSession(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         EnumerateSessionsData? data = await EnumerateAsync();
@@ -1176,7 +1190,7 @@ public sealed class MainForm : Form
             return;
 
         string name = sessions[picker.SelectedIndex];
-        if (await Guard(() => _session.SetAutoLoadSessionNameAsync(name)))
+        if (await Guard(() => _client.SetAutoLoadSessionNameAsync(name)))
             SetStatus($"Auto-load session: {name}");
     }
 
@@ -1184,20 +1198,20 @@ public sealed class MainForm : Form
 
     private async void OnRename(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         string? name = Prompts.Input(this, "Rename server", "New server name:");
         if (name is null || name.Length == 0)
             return;
 
-        if (await Guard(() => _session.RenameServerAsync(name)))
+        if (await Guard(() => _client.RenameServerAsync(name)))
             SetStatus($"Renamed to: {name}");
     }
 
     private async void OnSetClientPassword(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         char[]? password = Prompts.Password(this, "Set client password", "Client password (blank to clear):");
@@ -1205,13 +1219,13 @@ public sealed class MainForm : Form
             return;
 
         ReadOnlyMemory<char>? pwd = password.Length == 0 ? null : password.AsMemory();
-        if (await Guard(() => _session.SetClientPasswordAsync(pwd)))
+        if (await Guard(() => _client.SetClientPasswordAsync(pwd)))
             SetStatus($"Client password {(pwd is null ? "cleared" : "set")}");
     }
 
     private async void OnRunCommand(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         string? command = Prompts.Input(this, "Run command", "Server console command:");
@@ -1221,7 +1235,7 @@ public sealed class MainForm : Form
         SetBusy(true);
         try
         {
-            FactoryServerResponseContent<RunCommandData> result = await _session.RunCommandAsync(command);
+            FactoryServerResponseContent<RunCommandData> result = await _client.RunCommandAsync(command);
             if (result.Data is not null)
                 Log($"> {command}\n{result.Data.CommandResult}");
             else
@@ -1239,33 +1253,33 @@ public sealed class MainForm : Form
 
     private async void OnApplyOptions(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         Dictionary<string, string>? kv = Prompts.KeyValue(this, "Apply server options", "One option per line as key=value:");
         if (kv is null || kv.Count == 0)
             return;
 
-        if (await Guard(() => _session.ApplyServerOptionsAsync(kv)))
+        if (await Guard(() => _client.ApplyServerOptionsAsync(kv)))
             SetStatus($"Applied {kv.Count} server option(s).");
     }
 
     private async void OnApplyAdvSettings(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         Dictionary<string, string>? kv = Prompts.KeyValue(this, "Apply advanced settings", "One setting per line as key=value:");
         if (kv is null || kv.Count == 0)
             return;
 
-        if (await Guard(() => _session.ApplyAdvancedGameSettingsAsync(kv)))
+        if (await Guard(() => _client.ApplyAdvancedGameSettingsAsync(kv)))
             SetStatus($"Applied {kv.Count} advanced setting(s).");
     }
 
     private async void OnShutdown(object? sender, EventArgs e)
     {
-        if (_session is null)
+        if (_client is null)
             return;
 
         if (MessageBox.Show(this, "Shut down the server?", "Shutdown", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
@@ -1273,7 +1287,7 @@ public sealed class MainForm : Form
 
         // The server is going down (or has already failed to answer): once the
         // shutdown request is answered — success or first error — disconnect.
-        bool ok = await Guard(() => _session.ShutdownAsync());
+        bool ok = await Guard(() => _client.ShutdownAsync());
         SetStatus(ok ? "Shutdown requested — disconnecting." : "Shutdown failed — disconnecting.");
         OnDisconnect(this, EventArgs.Empty);
     }
@@ -1348,7 +1362,7 @@ public sealed class MainForm : Form
     /// </summary>
     private void UpdateVisibility()
     {
-        FactoryServerSession? session = _session;
+        IFactoryServerClient? session = _client;
         bool connected = session is not null;
         FactoryServerPrivilegeLevel priv = session?.CurrentPrivilegeLevel ?? FactoryServerPrivilegeLevel.NotAuthenticated;
         bool admin = priv is FactoryServerPrivilegeLevel.Administrator or FactoryServerPrivilegeLevel.APIToken;

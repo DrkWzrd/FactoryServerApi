@@ -14,12 +14,6 @@ public interface IFactoryServerClientFactory
     /// </summary>
     Task<IFactoryServerClient> BuildFactoryServerClientAsync(string host, int port, string? apiToken = null, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Builds a high-level <see cref="FactoryServerSession"/> wrapper around the
-    /// client that owns the login flow: its <see cref="IFactoryServerClient.InitializeAsync"/>
-    /// claims an unclaimed server and guarantees Administrator authentication.
-    /// </summary>
-    Task<FactoryServerSession> BuildFactoryServerSessionAsync(string host, int port, FactoryServerCredentialPrompt prompt, string? apiToken = null, CancellationToken cancellationToken = default);
 }
 
 internal class FactoryServerClientFactory : IFactoryServerClientFactory
@@ -41,9 +35,4 @@ internal class FactoryServerClientFactory : IFactoryServerClientFactory
         return new FactoryServerClient(http, udp);
     }
 
-    public async Task<FactoryServerSession> BuildFactoryServerSessionAsync(string host, int port, FactoryServerCredentialPrompt prompt, string? apiToken = null, CancellationToken cancellationToken = default)
-    {
-        IFactoryServerClient client = await BuildFactoryServerClientAsync(host, port, apiToken, cancellationToken);
-        return new FactoryServerSession(client, prompt);
-    }
 }
