@@ -9,11 +9,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\FactoryServerApi\FactoryServerApi.csproj" />
+    <ProjectReference Include="..\..\FactoryServerApiNew\FactoryServerApiNew.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\FactoryServerApi\FactoryServerApi.settings.json" Link="FactoryServerApi.settings.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\FactoryServerApiNew\FactoryServerApiNew.settings.json" Link="FactoryServerApiNew.settings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Terminal.Gui" Version="2.2.3" />
   </ItemGroup>
 
 </Project>

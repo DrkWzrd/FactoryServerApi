@@ -13,6 +13,15 @@ public class FactoryServerResponseContent<T> where T : FactoryServerResponseCont
         ErrorData = error?.ErrorData;
     }
 
+    [JsonConstructor]
+    private FactoryServerResponseContent(T? data, string? errorCode, string? errorMessage, object? errorData)
+    {
+        Data = data;
+        ErrorCode = errorCode;
+        ErrorMessage = errorMessage;
+        ErrorData = errorData;
+    }
+
     public T? Data { get; init; }
 
     [JsonIgnore]

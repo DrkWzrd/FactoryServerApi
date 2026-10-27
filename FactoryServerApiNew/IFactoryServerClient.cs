@@ -345,8 +345,7 @@ internal class FactoryServerClient : IFactoryServerClient
                 //communicate to the user that must claim, and then ask for password and servername
             }
         }
-
-        await _udp.StartPollingAsync(cancellationToken: cancellationToken);
+        _ = _udp.StartPollingAsync(cancellationToken: cancellationToken);
     }
 
     public Task StartPollingAsync(CancellationToken cancellationToken = default)
