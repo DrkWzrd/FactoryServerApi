@@ -15,6 +15,7 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
     private readonly HttpClient _httpClient;
     private readonly Lock _stateLock = new();
     private readonly HttpOptions _options;
+    private volatile bool _disposed;
 
     public string? AuthenticationToken { get; private set; }
 
@@ -61,6 +62,19 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
             AuthenticationToken = null;
         }
         return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        // Wipe the secrets held in memory.
+        lock (_stateLock)
+        {
+            AuthenticationToken = null;
+            PlayerId = null;
+        }
     }
 
     public async Task<FactoryServerResponseContent<HealthCheckData>> HealthCheckAsync(string? clientCustomData, CancellationToken cancellationToken = default)

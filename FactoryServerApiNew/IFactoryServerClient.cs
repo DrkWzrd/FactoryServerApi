@@ -18,6 +18,8 @@ public readonly record struct FactoryServerClaimCheck(bool Unclaimed, string? In
 /// Both endpoints listen on the same server port (7777 by default).
 /// Admin functions are guarded by the login flow: if the current token lacks Administrator
 /// privileges, the client attempts to re-login with the last admin password used.
+/// Disposing the client wipes the secrets held in memory: the current
+/// authentication token and the last admin password used.
 /// </summary>
 public interface IFactoryServerClient : IDisposable
 {
@@ -539,5 +541,10 @@ internal class FactoryServerClient : IFactoryServerClient
         _udp.ServerStateReceived -= Udp_ServerStateReceived;
         _udp.ErrorOccurred -= Udp_ErrorOccurred;
         _udp.Dispose();
+
+        // Wipe the secrets held in memory: the last admin password used and
+        // the current authentication token (held by the HTTP client).
+        _adminPassword = null;
+        _http.Dispose();
     }
 }

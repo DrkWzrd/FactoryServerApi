@@ -2,7 +2,11 @@ using FactoryServerApiNew.Http.Responses;
 
 namespace FactoryServerApiNew.Http;
 
-public interface IFactoryServerHttpClient
+/// <summary>
+/// The HTTP transport for the Dedicated Server API. The current authentication
+/// token is stored in memory and is wiped by <see cref="IDisposable.Dispose"/>.
+/// </summary>
+public interface IFactoryServerHttpClient : IDisposable
 {
     FactoryGamePlayerId? PlayerId { get; }
     string? AuthenticationToken { get; }
