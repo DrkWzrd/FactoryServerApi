@@ -55,11 +55,6 @@ public interface IFactoryServerClient : IDisposable
     Task StopPollingAsync();
 
     /// <summary>
-    /// The player ID currently set for join/encryption ticket requests, if any.
-    /// </summary>
-    FactoryGamePlayerId? PlayerId { get; }
-
-    /// <summary>
     /// Whether the server has an Admin Password set, i.e. it is claimed.
     /// </summary>
     bool IsClaimed { get; }
@@ -83,12 +78,6 @@ public interface IFactoryServerClient : IDisposable
     Task<bool> AdministratorLoginAsync(ReadOnlyMemory<char> password, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Logs in as a player. A null <paramref name="password"/> attempts a passwordless login,
-    /// which is only possible if the Client Protection Password is not set.
-    /// </summary>
-    Task<bool> ClientLoginAsync(ReadOnlyMemory<char>? password, CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Claims an unclaimed server using the InitialAdmin token obtained from
     /// <see cref="CheckClaimStateAsync"/>. After a successful claim the
     /// server issues a new token that replaces it, dropping the InitialAdmin privilege.
@@ -100,10 +89,6 @@ public interface IFactoryServerClient : IDisposable
     /// so <paramref name="newAuthenticationToken"/> is set as the current token on success.
     /// </summary>
     Task<bool> SetAdminPasswordAsync(ReadOnlyMemory<char> password, string newAuthenticationToken, CancellationToken cancellationToken = default);
-
-    Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default);
-
-    Task ClearPlayerIdAsync(CancellationToken cancellationToken = default);
 
     // --- Server state ---
 
@@ -168,8 +153,6 @@ internal class FactoryServerClient : IFactoryServerClient
 
     public FactoryServerPrivilegeLevel CurrentPrivilegeLevel => AuthenticationTokenHelper.GetTokenLevel(_http.AuthenticationToken?.AsMemory());
 
-    public FactoryGamePlayerId? PlayerId => _http.PlayerId;
-
     public bool IsClaimed => _isClaimed;
 
     public FactoryServerStateUdpResponse? CurrentServerState => _currentServerState;
@@ -194,20 +177,6 @@ internal class FactoryServerClient : IFactoryServerClient
             return false;
 
         _adminPassword = password;
-        await _http.SetAuthenticationTokenAsync(result.Data.AuthenticationToken, cancellationToken);
-        return true;
-    }
-
-    public async Task<bool> ClientLoginAsync(ReadOnlyMemory<char>? password, CancellationToken cancellationToken = default)
-    {
-        Task<FactoryServerResponseContent<LoginData>> loginTask = password is null
-            ? _http.PasswordlessLoginAsync(FactoryServerPrivilegeLevel.Client, cancellationToken)
-            : _http.PasswordLoginAsync(FactoryServerPrivilegeLevel.Client, password.Value, cancellationToken);
-
-        FactoryServerResponseContent<LoginData> result = await loginTask;
-        if (result.Data is null)
-            return false;
-
         await _http.SetAuthenticationTokenAsync(result.Data.AuthenticationToken, cancellationToken);
         return true;
     }
@@ -239,12 +208,6 @@ internal class FactoryServerClient : IFactoryServerClient
         await _http.SetAuthenticationTokenAsync(newAuthenticationToken, cancellationToken);
         return true;
     }
-
-    public Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default)
-        => _http.SetPlayerIdAsync(playerId, cancellationToken);
-
-    public Task ClearPlayerIdAsync(CancellationToken cancellationToken = default)
-        => _http.ClearPlayerIdAsync(cancellationToken);
 
     public async Task<FactoryServerClaimCheck> CheckClaimStateAsync(CancellationToken cancellationToken = default)
     {

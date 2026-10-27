@@ -8,12 +8,7 @@ namespace FactoryServerApiNew.Http;
 /// </summary>
 public interface IFactoryServerHttpClient : IDisposable
 {
-    FactoryGamePlayerId? PlayerId { get; }
     string? AuthenticationToken { get; }
-
-    Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default);
-
-    Task ClearPlayerIdAsync(CancellationToken cancellationToken = default);
 
     Task SetAuthenticationTokenAsync(string authToken, CancellationToken cancellationToken = default);
 

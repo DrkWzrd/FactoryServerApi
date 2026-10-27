@@ -26,11 +26,8 @@ public sealed class MainForm : Form
     private Button _clearLog = null!;
 
     private Button _adminLogin = null!;
-    private Button _clientLogin = null!;
     private Button _claim = null!;
     private Button _setAdminPassword = null!;
-    private Button _setPlayerId = null!;
-    private Button _clearPlayerId = null!;
     private Button _isOnline = null!;
     private Button _getState = null!;
     private Button _queryState = null!;
@@ -164,11 +161,8 @@ public sealed class MainForm : Form
         TabControl tabs = new() { Dock = DockStyle.Fill };
         _tabAuth = MakeTab("Authentication",
             _adminLogin = MakeButton("Admin login"),
-            _clientLogin = MakeButton("Client login"),
             _claim = MakeButton("Claim server"),
-            _setAdminPassword = MakeButton("Set admin password"),
-            _setPlayerId = MakeButton("Set player ID"),
-            _clearPlayerId = MakeButton("Clear player ID"));
+            _setAdminPassword = MakeButton("Set admin password"));
         _tabState = MakeTab("Server state",
             _isOnline = MakeButton("Is server online"),
             _getState = MakeButton("Get server state"),
@@ -198,11 +192,8 @@ public sealed class MainForm : Form
         _connect.Click += OnConnect;
         _disconnect.Click += OnDisconnect;
         _adminLogin.Click += OnAdminLogin;
-        _clientLogin.Click += OnClientLogin;
         _claim.Click += OnClaim;
         _setAdminPassword.Click += OnSetAdminPassword;
-        _setPlayerId.Click += OnSetPlayerId;
-        _clearPlayerId.Click += OnClearPlayerId;
         _isOnline.Click += OnIsOnline;
         _getState.Click += OnGetState;
         _queryState.Click += OnQueryState;
@@ -228,7 +219,7 @@ public sealed class MainForm : Form
         // Every command button toggles with the connection state and busy flag.
         _commandButtons =
         [
-            _adminLogin, _clientLogin, _claim, _setAdminPassword, _setPlayerId, _clearPlayerId,
+            _adminLogin, _claim, _setAdminPassword,
             _isOnline, _getState, _queryState, _getOptions, _getAdvSettings,
             _createGame, _loadGame, _saveGame, _enumerateSaves, _downloadSave, _uploadSave, _deleteSaveFile, _deleteSaveSession, _autoLoadSession,
             _rename, _setClientPassword, _runCommand, _applyOptions, _applyAdvSettings, _shutdown,
@@ -610,27 +601,6 @@ public sealed class MainForm : Form
         }
     }
 
-    private async void OnClientLogin(object? sender, EventArgs e)
-    {
-        if (_client is null)
-            return;
-
-        char[]? password = Prompts.Password(this, "Client login", "Client password (blank if none):");
-        if (password is null)
-            return;
-
-        ReadOnlyMemory<char>? pwd = password.Length == 0 ? null : password.AsMemory();
-        if (await Guard(() => _client.ClientLoginAsync(pwd)))
-        {
-            SetStatus($"Client login OK — privilege: {_client.CurrentPrivilegeLevel.ToString()}");
-            UpdateVisibility();
-        }
-        else
-        {
-            MessageBox.Show(this, "Client login failed.", "Client login", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-    }
-
     private async void OnClaim(object? sender, EventArgs e)
     {
         if (_client is null)
@@ -687,34 +657,6 @@ public sealed class MainForm : Form
         {
             MessageBox.Show(this, "Failed to update the admin password.", "Set admin password", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
-    }
-
-    private async void OnSetPlayerId(object? sender, EventArgs e)
-    {
-        if (_client is null)
-            return;
-
-        string? text = Prompts.Input(this, "Set player ID", "Player ID (Steam ID64 or Epic hex):");
-        if (text is null || text.Length == 0)
-            return;
-
-        FactoryGamePlayerId id = ulong.TryParse(text, out ulong steam)
-            ? new FactoryGamePlayerId(steam)
-            : new FactoryGamePlayerId(text);
-
-        await Guard(() => _client.SetPlayerIdAsync(id));
-        SetStatus($"Player ID set: {id}");
-        UpdateVisibility();
-    }
-
-    private async void OnClearPlayerId(object? sender, EventArgs e)
-    {
-        if (_client is null)
-            return;
-
-        await Guard(() => _client.ClearPlayerIdAsync());
-        SetStatus("Player ID cleared.");
-        UpdateVisibility();
     }
 
     // --- Server state ---
@@ -1259,9 +1201,8 @@ public sealed class MainForm : Form
 
     /// <summary>
     /// Shows only the commands that make sense for the current login state:
-    /// admin commands for admins, login commands when logged out, claim only
-    /// on unclaimed servers, player ID commands according to the stored ID.
-    /// Section headers follow their buttons.
+    /// admin commands for admins, login when logged out, claim only on
+    /// unclaimed servers.
     /// </summary>
     private void UpdateVisibility()
     {
@@ -1269,15 +1210,10 @@ public sealed class MainForm : Form
         bool connected = session is not null;
         FactoryServerPrivilegeLevel priv = session?.CurrentPrivilegeLevel ?? FactoryServerPrivilegeLevel.NotAuthenticated;
         bool admin = priv is FactoryServerPrivilegeLevel.Administrator or FactoryServerPrivilegeLevel.APIToken;
-        bool loggedIn = priv is not FactoryServerPrivilegeLevel.NotAuthenticated;
-        bool hasPlayerId = session?.PlayerId is not null;
 
         _adminLogin.Visible = connected && !admin;
-        _clientLogin.Visible = connected && !loggedIn;
         _claim.Visible = connected && _initialAdminToken is not null;
         _setAdminPassword.Visible = admin;
-        _setPlayerId.Visible = connected && !hasPlayerId;
-        _clearPlayerId.Visible = hasPlayerId;
 
         _isOnline.Visible = connected;
         _getState.Visible = connected;

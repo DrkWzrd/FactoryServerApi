@@ -10,8 +10,6 @@ namespace FactoryServerApiNew.Http;
 
 internal class FactoryServerHttpClient : IFactoryServerHttpClient
 {
-    private const string PlayerIdHeader = "X-FactoryGame-PlayerId";
-
     private readonly HttpClient _httpClient;
     private readonly Lock _stateLock = new();
     private readonly HttpOptions _options;
@@ -19,31 +17,11 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
 
     public string? AuthenticationToken { get; private set; }
 
-    public FactoryGamePlayerId? PlayerId { get; private set; }
-
     public FactoryServerHttpClient(IHttpClientFactory httpClientFactory, string host, int port, IOptions<HttpOptions> options)
     {
         _options = options.Value;
         _httpClient = httpClientFactory.CreateClient("factoryServerHttpClient");
         _httpClient.BaseAddress = new UriBuilder("https", host, port).Uri;
-    }
-
-    public Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default)
-    {
-        lock (_stateLock)
-        {
-            PlayerId = playerId;
-        }
-        return Task.CompletedTask;
-    }
-
-    public Task ClearPlayerIdAsync(CancellationToken cancellationToken = default)
-    {
-        lock (_stateLock)
-        {
-            PlayerId = null;
-        }
-        return Task.CompletedTask;
     }
 
     public Task SetAuthenticationTokenAsync(string authenticationToken, CancellationToken cancellationToken = default)
@@ -73,7 +51,6 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         lock (_stateLock)
         {
             AuthenticationToken = null;
-            PlayerId = null;
         }
     }
 
@@ -253,11 +230,9 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
     private async Task<HttpResponseMessage> ExecuteRequestAsync(HttpContent content, CancellationToken cancellationToken)
     {
         string? authToken;
-        FactoryGamePlayerId? playerId;
         lock (_stateLock)
         {
             authToken = AuthenticationToken;
-            playerId = PlayerId;
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, _options.ApiPath)
@@ -268,9 +243,6 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         request.Headers.Authorization = authToken is not null
             ? new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, authToken)
             : null;
-
-        if (playerId is not null)
-            request.Headers.Add(PlayerIdHeader, playerId.Value.ToString());
 
         return await _httpClient.SendAsync(request, cancellationToken);
     }
