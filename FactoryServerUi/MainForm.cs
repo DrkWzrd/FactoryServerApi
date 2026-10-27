@@ -63,6 +63,7 @@ public sealed class MainForm : Form
     private TabPage _tabAdmin = null!;
 
     private IFactoryServerClient? _client;
+    private string? _initialAdminToken;
     private IServiceProvider? _services;
     private bool _busy;
     private string? _lastUdpState;
@@ -311,14 +312,16 @@ public sealed class MainForm : Form
             session.ServerStateReceived += OnServerStateReceived;
             session.ErrorOccurred += OnClientError;
 
-            // Runs the whole workflow: claim check (prompting to create the admin
-            // password when the server is unclaimed) and admin login.
-            await session.InitializeAsync();
-            if (session.MustClaim)
+            // First action: check the claim state. An unclaimed server yields an
+            // InitialAdmin token to claim with (prompting for name + password).
+            FactoryServerClaimCheck check = await session.CheckClaimStateAsync();
+            if (check.Unclaimed)
             {
+                _initialAdminToken = check.InitialAdminToken;
                 (string serverName, ReadOnlyMemory<char> adminPassword) = await ClaimServerPrompt();
-                if (!await session.ClaimServerAsync(serverName, adminPassword))
+                if (!await session.ClaimServerAsync(serverName, adminPassword, check.InitialAdminToken!))
                     throw new InvalidOperationException("Failed to claim the server.");
+                _initialAdminToken = null; // the claim invalidated the InitialAdmin token
             }
             if (session.CurrentPrivilegeLevel is not (FactoryServerPrivilegeLevel.Administrator or FactoryServerPrivilegeLevel.APIToken))
             {
@@ -382,6 +385,7 @@ public sealed class MainForm : Form
         // (stopping the poll loop, closing the socket) can block and must not
         // run on the UI thread.
         _client = null;
+        _initialAdminToken = null;
         _services = null;
         SetConnected(false);
         SetBusy(true);
@@ -414,6 +418,7 @@ public sealed class MainForm : Form
         IFactoryServerClient? session = _client;
         IServiceProvider? services = _services;
         _client = null;
+        _initialAdminToken = null;
         _services = null;
 
         // Best effort: the app is exiting, so don't wait for the teardown.
@@ -648,6 +653,15 @@ public sealed class MainForm : Form
         if (_client is null)
             return;
 
+        // Re-acquire the InitialAdmin token if we don't have one (e.g. after a failed claim).
+        if (_initialAdminToken is null)
+        {
+            FactoryServerClaimCheck check = await _client.CheckClaimStateAsync();
+            if (!check.Unclaimed)
+                return; // the server is claimed
+            _initialAdminToken = check.InitialAdminToken;
+        }
+
         string? name = Prompts.Input(this, "Claim server", "Server name:", "My Factory Server");
         if (name is null || name.Length == 0)
             return;
@@ -656,8 +670,9 @@ public sealed class MainForm : Form
         if (password is null)
             return;
 
-        if (await Guard(() => _client.ClaimServerAsync(name, password.AsMemory())))
+        if (await Guard(() => _client!.ClaimServerAsync(name, password.AsMemory(), _initialAdminToken!)))
         {
+            _initialAdminToken = null; // the claim invalidated the InitialAdmin token
             SetStatus($"Claimed — privilege: {_client.CurrentPrivilegeLevel.ToString()}, claimed: {_client.IsClaimed}");
             UpdateVisibility();
         }
@@ -1371,7 +1386,7 @@ public sealed class MainForm : Form
 
         _adminLogin.Visible = connected && !admin;
         _clientLogin.Visible = connected && !loggedIn;
-        _claim.Visible = session?.MustClaim == true;
+        _claim.Visible = connected && _initialAdminToken is not null;
         _setAdminPassword.Visible = admin;
         _setApiToken.Visible = admin;
         _clearLogin.Visible = loggedIn;
