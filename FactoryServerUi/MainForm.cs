@@ -32,7 +32,6 @@ public sealed class MainForm : Form
     private Button _setApiToken = null!;
     private Button _clearLogin = null!;
     private Button _verifyToken = null!;
-    private Button _ensureAdmin = null!;
     private Button _setPlayerId = null!;
     private Button _clearPlayerId = null!;
     private Button _isOnline = null!;
@@ -175,7 +174,6 @@ public sealed class MainForm : Form
             _setApiToken = MakeButton("Set API token"),
             _clearLogin = MakeButton("Clear login data"),
             _verifyToken = MakeButton("Verify token"),
-            _ensureAdmin = MakeButton("Ensure admin"),
             _setPlayerId = MakeButton("Set player ID"),
             _clearPlayerId = MakeButton("Clear player ID"));
         _tabState = MakeTab("Server state",
@@ -214,7 +212,6 @@ public sealed class MainForm : Form
         _setApiToken.Click += OnSetApiToken;
         _clearLogin.Click += OnClearLogin;
         _verifyToken.Click += OnVerifyToken;
-        _ensureAdmin.Click += OnEnsureAdmin;
         _setPlayerId.Click += OnSetPlayerId;
         _clearPlayerId.Click += OnClearPlayerId;
         _isOnline.Click += OnIsOnline;
@@ -243,7 +240,7 @@ public sealed class MainForm : Form
         // Every command button toggles with the connection state and busy flag.
         _commandButtons =
         [
-            _adminLogin, _clientLogin, _claim, _setAdminPassword, _setApiToken, _clearLogin, _verifyToken, _ensureAdmin, _setPlayerId, _clearPlayerId,
+            _adminLogin, _clientLogin, _claim, _setAdminPassword, _setApiToken, _clearLogin, _verifyToken, _setPlayerId, _clearPlayerId,
             _isOnline, _getState, _health, _queryState, _getOptions, _getAdvSettings,
             _createGame, _loadGame, _saveGame, _enumerateSaves, _downloadSave, _uploadSave, _deleteSaveFile, _deleteSaveSession, _autoLoadSession,
             _rename, _setClientPassword, _runCommand, _applyOptions, _applyAdvSettings, _shutdown,
@@ -326,12 +323,9 @@ public sealed class MainForm : Form
             }
             if (session.CurrentPrivilegeLevel is not (FactoryServerPrivilegeLevel.Administrator or FactoryServerPrivilegeLevel.APIToken))
             {
-                if (!await session.EnsureAdminAuthenticationAsync())
-                {
-                    ReadOnlyMemory<char> adminPassword = await AdminPasswordPrompt();
-                    if (!await session.AdministratorLoginAsync(adminPassword))
-                        throw new InvalidOperationException("Failed to log in as Administrator.");
-                }
+                ReadOnlyMemory<char> adminPassword = await AdminPasswordPrompt();
+                if (!await session.AdministratorLoginAsync(adminPassword))
+                    throw new InvalidOperationException("Failed to log in as Administrator.");
             }
 
             _client = session;
@@ -745,28 +739,6 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             Log($"Verify token failed: {ex.Message}");
-        }
-        finally
-        {
-            SetBusy(false);
-        }
-    }
-
-    private async void OnEnsureAdmin(object? sender, EventArgs e)
-    {
-        if (_client is null)
-            return;
-
-        SetBusy(true);
-        try
-        {
-            bool ok = await _client.EnsureAdminAuthenticationAsync();
-            Log($"Ensure admin: {(ok ? "OK" : "failed")} — privilege: {_client.CurrentPrivilegeLevel.ToString()}");
-            UpdateVisibility();
-        }
-        catch (Exception ex)
-        {
-            Log($"Ensure admin failed: {ex.Message}");
         }
         finally
         {
@@ -1392,7 +1364,6 @@ public sealed class MainForm : Form
         _setApiToken.Visible = admin;
         _clearLogin.Visible = loggedIn;
         _verifyToken.Visible = loggedIn;
-        _ensureAdmin.Visible = admin;
         _setPlayerId.Visible = connected && !hasPlayerId;
         _clearPlayerId.Visible = hasPlayerId;
 
