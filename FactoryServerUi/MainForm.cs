@@ -29,14 +29,10 @@ public sealed class MainForm : Form
     private Button _clientLogin = null!;
     private Button _claim = null!;
     private Button _setAdminPassword = null!;
-    private Button _setApiToken = null!;
-    private Button _clearLogin = null!;
-    private Button _verifyToken = null!;
     private Button _setPlayerId = null!;
     private Button _clearPlayerId = null!;
     private Button _isOnline = null!;
     private Button _getState = null!;
-    private Button _health = null!;
     private Button _queryState = null!;
     private Button _getOptions = null!;
     private Button _getAdvSettings = null!;
@@ -171,15 +167,11 @@ public sealed class MainForm : Form
             _clientLogin = MakeButton("Client login"),
             _claim = MakeButton("Claim server"),
             _setAdminPassword = MakeButton("Set admin password"),
-            _setApiToken = MakeButton("Set API token"),
-            _clearLogin = MakeButton("Clear login data"),
-            _verifyToken = MakeButton("Verify token"),
             _setPlayerId = MakeButton("Set player ID"),
             _clearPlayerId = MakeButton("Clear player ID"));
         _tabState = MakeTab("Server state",
             _isOnline = MakeButton("Is server online"),
             _getState = MakeButton("Get server state"),
-            _health = MakeButton("Health check"),
             _queryState = MakeButton("Query state"),
             _getOptions = MakeButton("Get server options"),
             _getAdvSettings = MakeButton("Get advanced settings"));
@@ -209,14 +201,10 @@ public sealed class MainForm : Form
         _clientLogin.Click += OnClientLogin;
         _claim.Click += OnClaim;
         _setAdminPassword.Click += OnSetAdminPassword;
-        _setApiToken.Click += OnSetApiToken;
-        _clearLogin.Click += OnClearLogin;
-        _verifyToken.Click += OnVerifyToken;
         _setPlayerId.Click += OnSetPlayerId;
         _clearPlayerId.Click += OnClearPlayerId;
         _isOnline.Click += OnIsOnline;
         _getState.Click += OnGetState;
-        _health.Click += OnHealthCheck;
         _queryState.Click += OnQueryState;
         _getOptions.Click += OnGetOptions;
         _getAdvSettings.Click += OnGetAdvSettings;
@@ -240,8 +228,8 @@ public sealed class MainForm : Form
         // Every command button toggles with the connection state and busy flag.
         _commandButtons =
         [
-            _adminLogin, _clientLogin, _claim, _setAdminPassword, _setApiToken, _clearLogin, _verifyToken, _setPlayerId, _clearPlayerId,
-            _isOnline, _getState, _health, _queryState, _getOptions, _getAdvSettings,
+            _adminLogin, _clientLogin, _claim, _setAdminPassword, _setPlayerId, _clearPlayerId,
+            _isOnline, _getState, _queryState, _getOptions, _getAdvSettings,
             _createGame, _loadGame, _saveGame, _enumerateSaves, _downloadSave, _uploadSave, _deleteSaveFile, _deleteSaveSession, _autoLoadSession,
             _rename, _setClientPassword, _runCommand, _applyOptions, _applyAdvSettings, _shutdown,
             udpStart, udpStop
@@ -701,51 +689,6 @@ public sealed class MainForm : Form
         }
     }
 
-    private async void OnSetApiToken(object? sender, EventArgs e)
-    {
-        if (_client is null)
-            return;
-
-        string? token = Prompts.Input(this, "Set API token", "Authentication token:");
-        if (token is null || token.Length == 0)
-            return;
-
-        await Guard(() => _client.SetAuthenticationTokenAsync(token));
-        SetStatus($"API token set — privilege: {_client.CurrentPrivilegeLevel.ToString()}");
-        UpdateVisibility();
-    }
-
-    private async void OnClearLogin(object? sender, EventArgs e)
-    {
-        if (_client is null)
-            return;
-
-        await Guard(() => _client.ClearLoginDataAsync());
-        SetStatus($"Login data cleared — privilege: {_client.CurrentPrivilegeLevel.ToString()}");
-        UpdateVisibility();
-    }
-
-    private async void OnVerifyToken(object? sender, EventArgs e)
-    {
-        if (_client is null)
-            return;
-
-        SetBusy(true);
-        try
-        {
-            bool valid = await _client.GetIsAuthenticationTokenValidAsync();
-            Log($"Token valid: {valid}");
-        }
-        catch (Exception ex)
-        {
-            Log($"Verify token failed: {ex.Message}");
-        }
-        finally
-        {
-            SetBusy(false);
-        }
-    }
-
     private async void OnSetPlayerId(object? sender, EventArgs e)
     {
         if (_client is null)
@@ -817,34 +760,6 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             Log($"Get state failed: {ex.Message}");
-        }
-        finally
-        {
-            SetBusy(false);
-        }
-    }
-
-    private async void OnHealthCheck(object? sender, EventArgs e)
-    {
-        if (_client is null)
-            return;
-
-        string? custom = Prompts.Input(this, "Health check", "Client custom data (optional):");
-        if (custom is null)
-            return;
-
-        SetBusy(true);
-        try
-        {
-            FactoryServerResponseContent<HealthCheckData> result = await _client.HealthCheckAsync(custom.Length == 0 ? null : custom);
-            if (result.Data is not null)
-                Log($"Health: {result.Data.Health.ToString()} custom=\"{result.Data.ServerCustomData}\"");
-            else
-                Log($"Health check FAILED: {result.Error?.ErrorCode} {result.Error?.ErrorMessage}");
-        }
-        catch (Exception ex)
-        {
-            Log($"Health check failed: {ex.Message}");
         }
         finally
         {
@@ -1361,15 +1276,11 @@ public sealed class MainForm : Form
         _clientLogin.Visible = connected && !loggedIn;
         _claim.Visible = connected && _initialAdminToken is not null;
         _setAdminPassword.Visible = admin;
-        _setApiToken.Visible = admin;
-        _clearLogin.Visible = loggedIn;
-        _verifyToken.Visible = loggedIn;
         _setPlayerId.Visible = connected && !hasPlayerId;
         _clearPlayerId.Visible = hasPlayerId;
 
         _isOnline.Visible = connected;
         _getState.Visible = connected;
-        _health.Visible = connected;
         _queryState.Visible = connected;
         _getOptions.Visible = connected;
         _getAdvSettings.Visible = connected;

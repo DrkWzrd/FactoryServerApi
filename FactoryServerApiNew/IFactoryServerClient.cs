@@ -101,16 +101,6 @@ public interface IFactoryServerClient : IDisposable
     /// </summary>
     Task<bool> SetAdminPasswordAsync(ReadOnlyMemory<char> password, string newAuthenticationToken, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Sets the authentication token, e.g. a long-lived API token issued by the
-    /// <c>server.GenerateAPIToken</c> console command for third party applications.
-    /// </summary>
-    Task SetAuthenticationTokenAsync(string authToken, CancellationToken cancellationToken = default);
-
-    Task ClearLoginDataAsync(CancellationToken cancellationToken = default);
-
-    Task<bool> GetIsAuthenticationTokenValidAsync(CancellationToken cancellationToken = default);
-
     Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default);
 
     Task ClearPlayerIdAsync(CancellationToken cancellationToken = default);
@@ -126,8 +116,6 @@ public interface IFactoryServerClient : IDisposable
     /// Retrieves the current server state with a single UDP poll. Returns null if no response arrives.
     /// </summary>
     Task<FactoryServerStateUdpResponse?> GetServerStateAsync(CancellationToken cancellationToken = default);
-
-    Task<FactoryServerResponseContent<HealthCheckData>> HealthCheckAsync(string? clientCustomData, CancellationToken cancellationToken = default);
 
     Task<FactoryServerResponseContent<QueryServerStateData>> QueryServerStateAsync(CancellationToken cancellationToken = default);
 
@@ -252,20 +240,6 @@ internal class FactoryServerClient : IFactoryServerClient
         return true;
     }
 
-    public Task SetAuthenticationTokenAsync(string authToken, CancellationToken cancellationToken = default)
-        => _http.SetAuthenticationTokenAsync(authToken, cancellationToken);
-
-    public Task ClearLoginDataAsync(CancellationToken cancellationToken = default)
-        => _http.ClearAuthenticationTokenAsync(cancellationToken);
-
-    public async Task<bool> GetIsAuthenticationTokenValidAsync(CancellationToken cancellationToken = default)
-    {
-        if (_http.AuthenticationToken is null)
-            return false;
-
-        return await _http.VerifyAuthenticationTokenAsync(cancellationToken: cancellationToken) is null;
-    }
-
     public Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default)
         => _http.SetPlayerIdAsync(playerId, cancellationToken);
 
@@ -332,9 +306,6 @@ internal class FactoryServerClient : IFactoryServerClient
 
     public Task<FactoryServerStateUdpResponse?> GetServerStateAsync(CancellationToken cancellationToken = default)
         => TryReceiveUdpStateAsync(DefaultUdpTimeout, cancellationToken);
-
-    public Task<FactoryServerResponseContent<HealthCheckData>> HealthCheckAsync(string? clientCustomData, CancellationToken cancellationToken = default)
-        => _http.HealthCheckAsync(clientCustomData, cancellationToken);
 
     public Task<FactoryServerResponseContent<QueryServerStateData>> QueryServerStateAsync(CancellationToken cancellationToken = default)
         => _http.QueryServerStateAsync(cancellationToken);
