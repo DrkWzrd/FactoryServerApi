@@ -10,7 +10,7 @@ namespace FactoryServerApiNew;
 /// authentication lifecycle. After <see cref="InitializeAsync"/> the session is
 /// guaranteed to be authenticated with Administrator privileges: it claims an
 /// unclaimed server (prompting the user for the server name and admin password)
-/// and logs in as admin (re-using the persisted password first, then prompting
+/// and logs in as admin (re-using the in-memory password first, then prompting
 /// the user). Because the underlying client transparently refreshes expired
 /// tokens, every delegated operation runs with a valid token.
 /// </summary>
@@ -42,7 +42,7 @@ public sealed class FactoryServerSession : IFactoryServerClient
         }
 
         // 3. Ensure Administrator privileges. The underlying client re-logs in with
-        //    the persisted password first; only if that fails do we prompt the user.
+        //    the in-memory password first; only if that fails do we prompt the user.
         if (_client.CurrentPrivilegeLevel is not (FactoryServerPrivilegeLevel.Administrator or FactoryServerPrivilegeLevel.APIToken))
         {
             if (!await _client.EnsureAdminAuthenticationAsync(cancellationToken))

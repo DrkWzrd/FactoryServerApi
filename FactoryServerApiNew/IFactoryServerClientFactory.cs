@@ -38,7 +38,7 @@ internal class FactoryServerClientFactory : IFactoryServerClientFactory
         IFactoryServerUdpClient udp = await udpFactory.BuildFactoryServerUdpClientAsync(host, port, cancellationToken);
         IFactoryServerHttpClient http = await httpFactory.BuildFactoryServerHttpClientAsync(host, port, apiToken, cancellationToken);
 
-        return new FactoryServerClient(http, udp, host, port);
+        return new FactoryServerClient(http, udp);
     }
 
     public async Task<FactoryServerSession> BuildFactoryServerSessionAsync(string host, int port, FactoryServerCredentialPrompt prompt, string? apiToken = null, CancellationToken cancellationToken = default)

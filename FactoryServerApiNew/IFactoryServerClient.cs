@@ -52,23 +52,21 @@ public interface IFactoryServerClient : IDisposable
 
     /// <summary>
     /// Whether the server has an Admin Password set, i.e. it is claimed.
-    /// Claiming is irreversible by the client side, so this state is persisted
-    /// per server in the local application data folder and restored on startup.
     /// </summary>
     bool IsClaimed { get; }
 
     /// <summary>
     /// Whether the server is not claimed yet and needs to be claimed by the admin
     /// with <see cref="ClaimServerAsync"/>. True after <see cref="InitializeAsync"/>
-    /// succeeds on an unclaimed server: the InitialAdmin token is stored until
-    /// the claim is completed.
+    /// succeeds on an unclaimed server: the InitialAdmin token is kept in memory
+    /// until the claim is completed.
     /// </summary>
     bool MustClaim { get; }
 
     /// <summary>
     /// Initializes the client: a passwordless InitialAdmin login is attempted to
     /// check whether the server is claimed. If it is not claimed, the InitialAdmin
-    /// token is persisted so the admin can claim the server later with
+    /// token is kept in memory so the admin can claim the server later with
     /// <see cref="ClaimServerAsync"/> (see <see cref="MustClaim"/>).
     /// Starts UDP state polling.
     /// Throws <see cref="InvalidOperationException"/> if the claim check fails for
@@ -183,7 +181,6 @@ internal class FactoryServerClient : IFactoryServerClient
 
     private readonly IFactoryServerHttpClient _http;
     private readonly IFactoryServerUdpClient _udp;
-    private readonly FactoryServerClaimStore _claimStore;
     private ReadOnlyMemory<char>? _adminPassword;
     private string? _initialAdminToken;
     private volatile bool _isClaimed;
@@ -201,24 +198,12 @@ internal class FactoryServerClient : IFactoryServerClient
     public event EventHandler<FactoryServerStateUdpResponse>? ServerStateReceived;
     public event EventHandler<Exception>? ErrorOccurred;
 
-    internal FactoryServerClient(IFactoryServerHttpClient httpClient, IFactoryServerUdpClient udpClient, string host, int port)
+    internal FactoryServerClient(IFactoryServerHttpClient httpClient, IFactoryServerUdpClient udpClient)
     {
         _http = httpClient;
         _udp = udpClient;
-        _claimStore = new FactoryServerClaimStore(host, port);
-        _isClaimed = _claimStore.IsClaimed;
-        _initialAdminToken = _claimStore.InitialAdminToken;
-        _adminPassword = _claimStore.AdminPassword?.AsMemory();
         _udp.ServerStateReceived += Udp_ServerStateReceived;
         _udp.ErrorOccurred += Udp_ErrorOccurred;
-    }
-
-    private void PersistClaimState()
-    {
-        _claimStore.IsClaimed = _isClaimed;
-        _claimStore.InitialAdminToken = _initialAdminToken;
-        _claimStore.AdminPassword = _adminPassword?.ToString();
-        _claimStore.Save();
     }
 
     // --- Authentication ---
@@ -230,7 +215,6 @@ internal class FactoryServerClient : IFactoryServerClient
             return false;
 
         _adminPassword = password;
-        PersistClaimState();
         await _http.SetAuthenticationTokenAsync(result.Data.AuthenticationToken, cancellationToken);
         return true;
     }
@@ -274,7 +258,6 @@ internal class FactoryServerClient : IFactoryServerClient
         _initialAdminToken = null;
         _adminPassword = adminPassword;
         _isClaimed = true;
-        PersistClaimState();
         await _http.SetAuthenticationTokenAsync(claimResult.Data.AuthenticationToken, cancellationToken);
         return true;
     }
@@ -287,7 +270,6 @@ internal class FactoryServerClient : IFactoryServerClient
 
         // The token used for this request was invalidated by the server.
         _adminPassword = password;
-        PersistClaimState();
         await _http.SetAuthenticationTokenAsync(newAuthenticationToken, cancellationToken);
         return true;
     }
@@ -329,7 +311,6 @@ internal class FactoryServerClient : IFactoryServerClient
                 {
                     // Claimed by someone else
                     _isClaimed = true;
-                    PersistClaimState();
                 }
                 else
                 {
@@ -340,7 +321,6 @@ internal class FactoryServerClient : IFactoryServerClient
             {
 
                 _initialAdminToken = initialAdminResult.Data.AuthenticationToken;
-                PersistClaimState();
 
                 //communicate to the user that must claim, and then ask for password and servername
             }

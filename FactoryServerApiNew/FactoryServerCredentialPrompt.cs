@@ -18,7 +18,7 @@ public sealed class FactoryServerCredentialPrompt
     /// <summary>
     /// Asks the user for the server's admin password to log in with. Invoked when
     /// the client is not authenticated with admin privileges and has no usable
-    /// persisted admin password.
+    /// in-memory admin password.
     /// </summary>
     public Func<Task<ReadOnlyMemory<char>>> AdminPassword { get; }
 
