@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Headers;
+using System.Net.Http.Headers;
 using System.Net.Mime;
 using System.Reflection;
 using FactoryServerApi.Http;
@@ -21,12 +21,14 @@ public static class IServiceCollectionExtensions
 
     private static readonly HttpClientHandler DefaultHandler = new();
 
-    public static IHostApplicationBuilder AddFactoryServerServices(this IHostApplicationBuilder host)
+    /// <summary>
+    /// Registers the HTTPS and UDP API services. An optional settings file in the current
+    /// directory can override the in-code option defaults.
+    /// </summary>
+    public static IHostApplicationBuilder AddFactoryServerApiServices(this IHostApplicationBuilder host)
     {
-        // An optional settings file in the current directory can override the in-code defaults.
         host.Configuration.AddJsonFile(DefaultSettingsFilename, false);
 
-        // Defaults live in the option classes; a settings file only overrides the keys present.
         host.Services.AddOptions<HttpOptions>().BindConfiguration("httpConfiguration");
         host.Services.AddOptions<SslOptions>().BindConfiguration("sslConfiguration");
         host.Services.AddOptions<UdpOptions>().BindConfiguration("udpConfiguration");
@@ -50,7 +52,7 @@ public static class IServiceCollectionExtensions
             {
                 IOptions<SslOptions> options = sProv.GetRequiredService<IOptions<SslOptions>>();
 
-                switch (options?.Value.ServerCertificateValidationStrategy ?? null)
+                switch (options.Value.ServerCertificateValidationStrategy)
                 {
                     case SslValidationStrategy.NoValidation:
                         return NoValidationHandler;
@@ -72,5 +74,4 @@ public static class IServiceCollectionExtensions
 
         return host;
     }
-
 }

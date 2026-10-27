@@ -1,4 +1,4 @@
-﻿namespace FactoryServerApi.Http;
+namespace FactoryServerApi.Http;
 
 public enum SslValidationStrategy
 {

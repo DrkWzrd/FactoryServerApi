@@ -1,9 +1,9 @@
 using System.IO;
 using System.Text.Json;
-using FactoryServerApiNew;
-using FactoryServerApiNew.Http;
-using FactoryServerApiNew.Http.Responses;
-using FactoryServerApiNew.Udp;
+using FactoryServerApi;
+using FactoryServerApi.Http;
+using FactoryServerApi.Http.Responses;
+using FactoryServerApi.Udp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 

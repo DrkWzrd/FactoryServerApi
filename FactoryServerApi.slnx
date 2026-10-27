@@ -1,5 +1,4 @@
 <Solution>
   <Project Path="FactoryServerUi/FactoryServerUi.csproj" />
   <Project Path="FactoryServerApi/FactoryServerApi.csproj" />
-  <Project Path="FactoryServerApiNew/FactoryServerApiNew.csproj" />
 </Solution>

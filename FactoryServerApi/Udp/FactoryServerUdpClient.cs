@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Net;
@@ -137,13 +137,13 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
         _isListening = false;
     }
 
-    public Task ReceiveMessageAsync(TimeSpan timeout, CancellationToken ct = default)
+    public async Task<FactoryServerStateUdpResponse> ReceiveMessageAsync(TimeSpan timeout, CancellationToken ct = default)
     {
         CancellationTokenSource timeoutCts = new(timeout + TimeSpan.FromSeconds(1));
-        return ReceiveMessagePrivateAsync(timeoutCts, true, ct);
+        return (await ReceiveMessagePrivateAsync(timeoutCts, true, ct))!;
     }
 
-    private async Task ReceiveMessagePrivateAsync(CancellationTokenSource timeoutCts, bool throwEx, CancellationToken ct)
+    private async Task<FactoryServerStateUdpResponse?> ReceiveMessagePrivateAsync(CancellationTokenSource timeoutCts, bool throwEx, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
 
@@ -154,7 +154,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
         if (data.Length < 22 || data.Span[^1] != _options.MessageTermination)
         {
             HandleInvalid(throwEx, "Too short or bad termination");
-            return;
+            return null;
         }
 
         Span<byte> span = data.Span;
@@ -164,7 +164,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
             || span[3] != _options.ProtocolVersion)
         {
             HandleInvalid(throwEx, "Bad header");
-            return;
+            return null;
         }
 
         ulong cookie = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(4, 8));
@@ -172,7 +172,7 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
         if (!_sentCookies.TryRemove(cookie, out DateTimeOffset sentAt) || now - sentAt > CookieTtl)
         {
             HandleInvalid(throwEx, "Unexpected cookie");
-            return;
+            return null;
         }
 
         try
@@ -180,10 +180,12 @@ internal class FactoryServerUdpClient : IFactoryServerUdpClient, IDisposable
             FactoryServerStateUdpResponse response = FactoryServerStateUdpResponse.Deserialize(span[4..^1], now);
             if (!throwEx)
                 ServerStateReceived?.Invoke(this, response);
+            return response;
         }
         catch
         {
             HandleInvalid(throwEx, "Deserialization failed");
+            return null;
         }
 
         void HandleInvalid(bool shouldThrow, string reason)

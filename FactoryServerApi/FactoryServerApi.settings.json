@@ -8,7 +8,7 @@
         "messageTermination": 1
     },
     "httpConfiguration": {
-        "connectionTimeOut": "00:00:30",
+        "connectionTimeout": "00:00:30",
         "userAgentAppName": "factoryServerApi",
         "userAgentAppVersion": "0.3",
         "apiPath": "api/v1/"

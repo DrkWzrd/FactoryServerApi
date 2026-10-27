@@ -1,4 +1,4 @@
-﻿namespace FactoryServerApi;
+namespace FactoryServerApi;
 
 public class ServerGameState
 {

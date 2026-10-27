@@ -1,4 +1,4 @@
-﻿namespace FactoryServerApi.Http.Requests.Contents;
+namespace FactoryServerApi.Http.Requests.Contents;
 
 internal class DeleteSaveSessionRequestContent : FactoryServerRequestContent
 {

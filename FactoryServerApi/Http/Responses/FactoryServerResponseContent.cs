@@ -1,10 +1,33 @@
-﻿using System.Text.Json.Serialization;
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 
 namespace FactoryServerApi.Http.Responses;
 
 public class FactoryServerResponseContent<T> where T : FactoryServerResponseContentData
 {
+    internal FactoryServerResponseContent(T? data = default, FactoryServerError? error = null)
+    {
+        Data = data;
+        ErrorCode = error?.ErrorCode;
+        ErrorMessage = error?.ErrorMessage;
+        ErrorData = error?.ErrorData;
+    }
+
+    [JsonConstructor]
+    private FactoryServerResponseContent(T? data, string? errorCode, string? errorMessage, object? errorData)
+    {
+        Data = data;
+        ErrorCode = errorCode;
+        ErrorMessage = errorMessage;
+        ErrorData = errorData;
+    }
+
     public T? Data { get; init; }
+
+    [JsonIgnore]
+    [MemberNotNullWhen(true, nameof(Data))]
+    [MemberNotNullWhen(false, nameof(Error))]
+    public bool IsSuccess => Error is null;
 
     [JsonInclude]
     private string? ErrorCode { get; init; }

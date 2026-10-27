@@ -1,4 +1,4 @@
-﻿namespace FactoryServerApi.Http.Responses;
+namespace FactoryServerApi.Http.Responses;
 
 public class EnumerateSessionsData : FactoryServerResponseContentData
 {

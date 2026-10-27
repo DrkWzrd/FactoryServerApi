@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FactoryServerApiNew\FactoryServerApiNew.csproj" />
+    <ProjectReference Include="..\FactoryServerApi\FactoryServerApi.csproj" />
   </ItemGroup>
 
 </Project>

@@ -8,7 +8,7 @@ internal class VerifyAuthenticationTokenRequestContent : FactoryServerRequestCon
     {
         Dictionary<string, object> dict = new()
         {
-            {"token", authenticationToken },
+            {"authenticationToken", authenticationToken },
         };
         Data = new FactoryServerRequestContentData(dict);
 
