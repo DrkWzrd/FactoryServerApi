@@ -1,11 +1,10 @@
-using System.IO;
-using System.Text.Json;
 using FactoryServerApi;
 using FactoryServerApi.Http;
 using FactoryServerApi.Http.Responses;
 using FactoryServerApi.Udp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Text.Json;
 
 namespace FactoryServerUi;
 
@@ -273,12 +272,11 @@ public sealed class MainForm : Form
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         CertTrustValidator certValidator = new(this, _certStore, $"{host}:{port}");
         certValidator.CertificateChecked += OnCertificateChecked;
-        builder.Services.AddSingleton<IServerCertificateValidationStrategy>(certValidator);
+
         builder.AddFactoryServerApiServices();
-        // Registered after AddFactoryServerApiServices on purpose: its
-        // sslConfiguration binder would otherwise override this with the
-        // settings-file value (NoValidation).
-        builder.Services.Configure<SslOptions>(o => o.ServerCertificateValidationStrategy = SslValidationStrategy.Custom);
+        builder.Services.AddSingleton<IServerCertificateValidationStrategy>(certValidator);
+        builder.Services.PostConfigure<SslOptions>(o => o.ServerCertificateValidationStrategy = SslValidationStrategy.Custom);
+
         IServiceProvider app = builder.Services.BuildServiceProvider();
 
         IFactoryServerClient? session = null;

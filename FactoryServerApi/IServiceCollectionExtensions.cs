@@ -1,25 +1,19 @@
-using System.Net.Http.Headers;
-using System.Net.Mime;
-using System.Reflection;
 using FactoryServerApi.Http;
 using FactoryServerApi.Udp;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
+using System.Net.Mime;
+using System.Reflection;
 
 namespace FactoryServerApi;
 
 public static class IServiceCollectionExtensions
 {
     private const string DefaultSettingsFilename = $"{nameof(FactoryServerApi)}.settings.json";
-
-    private static readonly HttpClientHandler NoValidationHandler = new()
-    {
-        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-    };
-
-    private static readonly HttpClientHandler DefaultHandler = new();
 
     /// <summary>
     /// Registers the HTTPS and UDP API services. An optional settings file in the current
@@ -52,19 +46,19 @@ public static class IServiceCollectionExtensions
             {
                 IOptions<SslOptions> options = sProv.GetRequiredService<IOptions<SslOptions>>();
 
-                switch (options.Value.ServerCertificateValidationStrategy)
+                return options.Value.ServerCertificateValidationStrategy switch
                 {
-                    case SslValidationStrategy.NoValidation:
-                        return NoValidationHandler;
-                    case SslValidationStrategy.Custom:
-                        IServerCertificateValidationStrategy certValidationStrategy = sProv.GetRequiredService<IServerCertificateValidationStrategy>();
-                        return new HttpClientHandler()
-                        {
-                            ServerCertificateCustomValidationCallback = certValidationStrategy.CustomValidationCallback,
-                        };
-                    default:
-                        return DefaultHandler;
-                }
+                    SslValidationStrategy.NoValidation => new HttpClientHandler
+                    {
+                        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                    },
+                    SslValidationStrategy.Custom => new HttpClientHandler
+                    {
+                        CheckCertificateRevocationList = true,
+                        ServerCertificateCustomValidationCallback = sProv.GetRequiredService<IServerCertificateValidationStrategy>().CustomValidationCallback,
+                    },
+                    _ => new HttpClientHandler { CheckCertificateRevocationList = true },
+                };
             });
 
         host.Services.AddKeyedSingleton("factoryServerLocalSystemTimeProvider", TimeProvider.System)
