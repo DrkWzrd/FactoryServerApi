@@ -1,54 +1,28 @@
-﻿using System.Net.Http.Headers;
-using System.Net.Mime;
-using System.Reflection;
 using FactoryServerApi.Http;
 using FactoryServerApi.Udp;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
+using System.Net.Mime;
+using System.Reflection;
 
 namespace FactoryServerApi;
 
 public static class IServiceCollectionExtensions
 {
     private const string DefaultSettingsFilename = $"{nameof(FactoryServerApi)}.settings.json";
-    private const string DefaultJsonFileContent =
-        """
-        {
-            "udpConfiguration": {
-                "delayBetweenPolls": "00:00:10",
-                "messagesPerPoll": 2,
-                "timeoutRetriesBeforeStop": 3,
-                "protocolMagic": 63189,
-                "protocolVersion": 1,
-                "messageTermination": 1
-            },
-            "httpConfiguration": {
-                "connectionTimeOut": "00:00:30",
-                "userAgentAppName": "factoryServerApi",
-                "userAgentAppVersion": "0.3",
-                "apiPath": "api/v1/"
-            },
-            "sslConfiguration": {
-                "serverCertificateValidationStrategy": "NoValidation"
-            }
-        }
-        """;
 
-    private static readonly HttpClientHandler NoValidationHandler = new()
+    /// <summary>
+    /// Registers the HTTPS and UDP API services. An optional settings file in the current
+    /// directory can override the in-code option defaults.
+    /// </summary>
+    public static IHostApplicationBuilder AddFactoryServerApiServices(this IHostApplicationBuilder host)
     {
-        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-    };
-
-    private static readonly HttpClientHandler DefaultHandler = new();
-
-    public static IHostApplicationBuilder AddFactoryServerServices(this IHostApplicationBuilder host)
-    {
-        if (!File.Exists(DefaultSettingsFilename))
-            File.WriteAllText(DefaultSettingsFilename, DefaultJsonFileContent);
-
         host.Configuration.AddJsonFile(DefaultSettingsFilename, false);
+
         host.Services.AddOptions<HttpOptions>().BindConfiguration("httpConfiguration");
         host.Services.AddOptions<SslOptions>().BindConfiguration("sslConfiguration");
         host.Services.AddOptions<UdpOptions>().BindConfiguration("udpConfiguration");
@@ -72,19 +46,19 @@ public static class IServiceCollectionExtensions
             {
                 IOptions<SslOptions> options = sProv.GetRequiredService<IOptions<SslOptions>>();
 
-                switch (options?.Value.ServerCertificateValidationStrategy ?? null)
+                return options.Value.ServerCertificateValidationStrategy switch
                 {
-                    case SslValidationStrategy.NoValidation:
-                        return NoValidationHandler;
-                    case SslValidationStrategy.Custom:
-                        IServerCertificateValidationStrategy certValidationStrategy = sProv.GetRequiredService<IServerCertificateValidationStrategy>();
-                        return new HttpClientHandler()
-                        {
-                            ServerCertificateCustomValidationCallback = certValidationStrategy.CustomValidationCallback,
-                        };
-                    default:
-                        return DefaultHandler;
-                }
+                    SslValidationStrategy.NoValidation => new HttpClientHandler
+                    {
+                        ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                    },
+                    SslValidationStrategy.Custom => new HttpClientHandler
+                    {
+                        CheckCertificateRevocationList = true,
+                        ServerCertificateCustomValidationCallback = sProv.GetRequiredService<IServerCertificateValidationStrategy>().CustomValidationCallback,
+                    },
+                    _ => new HttpClientHandler { CheckCertificateRevocationList = true },
+                };
             });
 
         host.Services.AddKeyedSingleton("factoryServerLocalSystemTimeProvider", TimeProvider.System)
@@ -94,5 +68,4 @@ public static class IServiceCollectionExtensions
 
         return host;
     }
-
 }

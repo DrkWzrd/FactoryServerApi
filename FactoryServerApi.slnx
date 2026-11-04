@@ -1,3 +1,17 @@
 <Solution>
+  <Project Path="FactoryServerUi/FactoryServerUi.csproj" />
   <Project Path="FactoryServerApi/FactoryServerApi.csproj" />
+  <Properties Name="AutomaticVersions" Scope="PostLoad">
+    <Property Name="AdvancedSettingsExpanded" Value="True" />
+    <Property Name="AssemblyFileVersionSettings" Value="IncrementOnDemandWithResetOnIncrease.IncrementOnDemandWithResetOnIncrease.Increment.None" />
+    <Property Name="AssemblyInfoVersionSettings" Value="IncrementOnDemandWithResetOnIncrease.IncrementOnDemandWithResetOnIncrease.Increment.None" />
+    <Property Name="AssemblyInfoVersionType" Value="SettingsVersion" />
+    <Property Name="AssemblyVersionSettings" Value="IncrementOnDemandWithResetOnIncrease.IncrementOnDemandWithResetOnIncrease.Increment.None" />
+    <Property Name="InheritWinAppVersionFrom" Value="None" />
+    <Property Name="PrimaryVersionType" Value="AssemblyVersionAttribute" />
+    <Property Name="UpdateAssemblyFileVersion" Value="True" />
+    <Property Name="UpdateAssemblyInfoVersion" Value="True" />
+    <Property Name="UpdateAssemblyVersion" Value="True" />
+    <Property Name="UpdatePackageVersion" Value="False" />
+  </Properties>
 </Solution>

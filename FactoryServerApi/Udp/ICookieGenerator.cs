@@ -1,4 +1,4 @@
-﻿namespace FactoryServerApi.Udp;
+namespace FactoryServerApi.Udp;
 
 public interface ICookieGenerator
 {

@@ -1,48 +1,27 @@
-﻿using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Net.Mime;
 using FactoryServerApi.Http.Requests.Contents;
 using FactoryServerApi.Http.Responses;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Net.Mime;
 
 namespace FactoryServerApi.Http;
 
 internal class FactoryServerHttpClient : IFactoryServerHttpClient
 {
-    private const string PlayerIdHeader = "X-FactoryGame-PlayerId";
-
     private readonly HttpClient _httpClient;
     private readonly Lock _stateLock = new();
     private readonly HttpOptions _options;
+    private volatile bool _disposed;
 
     public string? AuthenticationToken { get; private set; }
-
-    public FactoryGamePlayerId? PlayerId { get; private set; }
 
     public FactoryServerHttpClient(IHttpClientFactory httpClientFactory, string host, int port, IOptions<HttpOptions> options)
     {
         _options = options.Value;
         _httpClient = httpClientFactory.CreateClient("factoryServerHttpClient");
         _httpClient.BaseAddress = new UriBuilder("https", host, port).Uri;
-    }
-
-    public Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default)
-    {
-        lock (_stateLock)
-        {
-            PlayerId = playerId;
-        }
-        return Task.CompletedTask;
-    }
-
-    public Task ClearPlayerIdAsync(CancellationToken cancellationToken = default)
-    {
-        lock (_stateLock)
-        {
-            PlayerId = null;
-        }
-        return Task.CompletedTask;
     }
 
     public Task SetAuthenticationTokenAsync(string authenticationToken, CancellationToken cancellationToken = default)
@@ -63,15 +42,36 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         return Task.CompletedTask;
     }
 
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        // Wipe the secrets held in memory.
+        lock (_stateLock)
+        {
+            AuthenticationToken = null;
+        }
+    }
+
     public async Task<FactoryServerResponseContent<HealthCheckData>> HealthCheckAsync(string? clientCustomData, CancellationToken cancellationToken = default)
     {
         HealthCheckRequestContent content = new(clientCustomData);
         return await ExecuteRequestWithEnsuredJsonResponse<HealthCheckData>(content, cancellationToken);
     }
 
-    public async Task<FactoryServerError?> VerifyAuthenticationTokenAsync(CancellationToken cancellationToken = default)
+    public async Task<FactoryServerError?> VerifyAuthenticationTokenAsync(string? authenticationToken = null, CancellationToken cancellationToken = default)
     {
-        VerifyAuthenticationTokenRequestContent content = new();
+        // The live server requires the token and a privilege level in the request
+        // body (the API docs predate this requirement). Default to the stored token.
+        if (authenticationToken is null)
+            lock (_stateLock)
+                authenticationToken = AuthenticationToken;
+
+        if (authenticationToken is null)
+            throw new InvalidOperationException("No authentication token to verify.");
+
+        VerifyAuthenticationTokenRequestContent content = new(authenticationToken);
         return await ExecuteMaybeVoidRequestAsync(content, cancellationToken);
     }
 
@@ -230,11 +230,9 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
     private async Task<HttpResponseMessage> ExecuteRequestAsync(HttpContent content, CancellationToken cancellationToken)
     {
         string? authToken;
-        FactoryGamePlayerId? playerId;
         lock (_stateLock)
         {
             authToken = AuthenticationToken;
-            playerId = PlayerId;
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, _options.ApiPath)
@@ -246,9 +244,6 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
             ? new AuthenticationHeaderValue(JwtBearerDefaults.AuthenticationScheme, authToken)
             : null;
 
-        if (playerId is not null)
-            request.Headers.Add(PlayerIdHeader, playerId.Value.ToString());
-
         return await _httpClient.SendAsync(request, cancellationToken);
     }
 
@@ -258,7 +253,12 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
             throw new InvalidOperationException("No content found in response when content was expected.");
 
-        if (response.Content.Headers.ContentType?.MediaType?.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) != true)
+        string? mediaType = response.Content.Headers.ContentType?.MediaType;
+        if (string.IsNullOrEmpty(mediaType))
+            throw new InvalidDataException(
+                $"The server returned an empty body (status {(int)response.StatusCode}) where 'application/json' content was expected.");
+
+        if (mediaType.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) != true)
         {
             throw new InvalidOperationException(
                 $"Unexpected response content media type: '{response.Content.Headers.ContentType}'. " +
@@ -273,10 +273,12 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
 
     private static async Task<FactoryServerError?> HandleMaybeVoidResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken = default)
     {
-        if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+        // 201 Created, 202 Accepted and 204 No Content can all arrive with an empty body on success.
+        string? mediaType = response.Content.Headers.ContentType?.MediaType;
+        if (string.IsNullOrEmpty(mediaType))
             return null;
 
-        if (response.Content.Headers.ContentType?.MediaType?.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) != true)
+        if (mediaType.StartsWith(MediaTypeNames.Application.Json, StringComparison.OrdinalIgnoreCase) != true)
         {
             throw new InvalidOperationException(
                 $"Unexpected response content media type: '{response.Content.Headers.ContentType}'. " +
@@ -286,7 +288,8 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         FactoryServerError result = await response.Content.ReadFromJsonAsync<FactoryServerError>(cancellationToken)
             ?? throw new InvalidDataException("Unexpected response data from server.");
 
-        return result;
+        // A 200 success response without an error code is not an error.
+        return string.IsNullOrEmpty(result.ErrorCode) ? null : result;
     }
 
     private static async Task<FactoryServerResponseContent<DownloadSaveGameData>> HandleMaybeOctetResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken = default)
@@ -294,9 +297,10 @@ internal class FactoryServerHttpClient : IFactoryServerHttpClient
         if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
             throw new InvalidOperationException("No content found in response when content was expected.");
 
-        Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        if (response.Content.Headers.ContentType?.MediaType == MediaTypeNames.Application.Octet)
+        // Per the API docs, file responses are distinguished by the presence of a Content-Disposition header.
+        if (response.Content.Headers.ContentDisposition is not null)
         {
+            Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             DownloadSaveGameData data = new(stream);
             return new FactoryServerResponseContent<DownloadSaveGameData>()
             {

@@ -1,3 +1,3 @@
-﻿namespace FactoryServerApi.Http.Responses;
+namespace FactoryServerApi.Http.Responses;
 
 public abstract class FactoryServerResponseContentData { }

@@ -1,15 +1,14 @@
-﻿using FactoryServerApi.Http.Responses;
+using FactoryServerApi.Http.Responses;
 
 namespace FactoryServerApi.Http;
 
-public interface IFactoryServerHttpClient
+/// <summary>
+/// The HTTP transport for the Dedicated Server API. The current authentication
+/// token is stored in memory and is wiped by <see cref="IDisposable.Dispose"/>.
+/// </summary>
+public interface IFactoryServerHttpClient : IDisposable
 {
-    FactoryGamePlayerId? PlayerId { get; }
     string? AuthenticationToken { get; }
-
-    Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default);
-
-    Task ClearPlayerIdAsync(CancellationToken cancellationToken = default);
 
     Task SetAuthenticationTokenAsync(string authToken, CancellationToken cancellationToken = default);
 
@@ -21,7 +20,7 @@ public interface IFactoryServerHttpClient
 
     Task<FactoryServerResponseContent<LoginData>> PasswordLoginAsync(FactoryServerPrivilegeLevel minimumPrivilegeLevel, ReadOnlyMemory<char> password, CancellationToken cancellationToken = default);
 
-    Task<FactoryServerError?> VerifyAuthenticationTokenAsync(CancellationToken cancellationToken = default);
+    Task<FactoryServerError?> VerifyAuthenticationTokenAsync(string? authenticationToken = null, CancellationToken cancellationToken = default);
 
     Task<FactoryServerResponseContent<QueryServerStateData>> QueryServerStateAsync(CancellationToken cancellationToken = default);
 

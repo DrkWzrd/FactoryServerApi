@@ -1,25 +1,474 @@
-﻿using FactoryServerApi.Http;
+using FactoryServerApi.Http;
+using FactoryServerApi.Http.Responses;
+using FactoryServerApi.Udp;
+using System.Net.Sockets;
 
 namespace FactoryServerApi;
 
+/// <summary>
+/// The outcome of a claim-state check. When <see cref="Unclaimed"/> is true,
+/// <see cref="InitialAdminToken"/> carries the token required to claim the server
+/// with <see cref="IFactoryServerClient.ClaimServerAsync"/>.
+/// </summary>
+public readonly record struct FactoryServerClaimCheck(bool Unclaimed, string? InitialAdminToken);
+
+/// <summary>
+/// Merged access point to the Dedicated Server API: the HTTPS API for detailed state and control,
+/// and the UDP Lightweight Query for polling the server state with minimal overhead.
+/// Both endpoints listen on the same server port (7777 by default).
+/// Admin functions are guarded by the login flow: if the current token lacks Administrator
+/// privileges, the client attempts to re-login with the last admin password used.
+/// Disposing the client wipes the secrets held in memory: the current
+/// authentication token and the last admin password used.
+/// </summary>
 public interface IFactoryServerClient : IDisposable
 {
-    FactoryGamePlayerId? PlayerId { get; }
-    FactoryServerPrivilegeLevel ClientCurrentPrivilegeLevel { get; }
-    IFactoryServerHttpClient ApiAccessPoint { get; }
+    /// <summary>
+    /// Raised for every server state received while UDP polling is active.
+    /// </summary>
+    event EventHandler<FactoryServerStateUdpResponse>? ServerStateReceived;
 
-    event EventHandler<FactoryServerErrorEventArgs>? ErrorOccurred;
-    event EventHandler<FactoryServerStateChangedEventArgs>? ServerStateChanged;
+    /// <summary>
+    /// Raised when the UDP endpoint encounters an error, e.g. no server response
+    /// after a number of attempts.
+    /// </summary>
+    event EventHandler<Exception>? ErrorOccurred;
 
-    Task AdministratorLoginAsync(ReadOnlyMemory<char> password, CancellationToken cancellationToken = default);
-    Task ClaimServerAsync(string serverName, ReadOnlyMemory<char> adminPassword, CancellationToken cancellationToken = default);
-    Task ClearLoginDataAsync(CancellationToken cancellationToken = default);
-    Task ClearPlayerIdAsync(CancellationToken cancellationToken = default);
-    Task ClientLoginAsync(ReadOnlyMemory<char>? password, CancellationToken cancellationToken = default);
-    Task<FactoryServerInfoSnapshot> GetCurrentServerStateAsync(CancellationToken cancellationToken = default);
-    Task<bool> GetIsAuthenticationTokenValidAsync(CancellationToken cancellationToken = default);
-    Task<bool> GetIsServerOnlineAsync(TimeSpan timeout, bool checkUdp = true, CancellationToken cancellationToken = default);
-    Task SetAuthenticationTokenAsync(string authToken, CancellationToken cancellationToken = default);
-    Task SetPlayerIdAsync(FactoryGamePlayerId playerId, CancellationToken cancellationToken = default);
-    Task InitializeClientAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// The privilege level granted by the current authentication token.
+    /// </summary>
+    FactoryServerPrivilegeLevel CurrentPrivilegeLevel { get; }
+
+    /// <summary>
+    /// The last server state received via UDP, if any.
+    /// </summary>
+    FactoryServerStateUdpResponse? CurrentServerState { get; }
+
+    // --- Polling ---
+
+    /// <summary>
+    /// Starts continuous UDP state polling. Raises <see cref="ServerStateReceived"/>
+    /// for every response and <see cref="ErrorOccurred"/> on failure.
+    /// </summary>
+    Task StartPollingAsync(CancellationToken cancellationToken = default);
+
+    Task StopPollingAsync();
+
+    /// <summary>
+    /// Whether the server has an Admin Password set, i.e. it is claimed.
+    /// </summary>
+    bool IsClaimed { get; }
+
+    /// <summary>
+    /// The first action after connecting: checks whether the server is claimed.
+    /// If it is unclaimed, an InitialAdmin token is acquired via a passwordless
+    /// login and the result carries it in
+    /// <see cref="FactoryServerClaimCheck.InitialAdminToken"/>.
+    /// If the server is already claimed, the result reports <c>Unclaimed == false</c>.
+    /// Throws <see cref="InvalidOperationException"/> if the claim check fails
+    /// for a reason other than the server already being claimed.
+    /// </summary>
+    Task<FactoryServerClaimCheck> CheckClaimStateAsync(CancellationToken cancellationToken = default);
+
+    // --- Authentication ---
+
+    /// <summary>
+    /// Logs in with the server's Admin Password.
+    /// </summary>
+    Task<bool> AdministratorLoginAsync(ReadOnlyMemory<char> password, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Claims an unclaimed server using the InitialAdmin token obtained from
+    /// <see cref="CheckClaimStateAsync"/>. After a successful claim the
+    /// server issues a new token that replaces it, dropping the InitialAdmin privilege.
+    /// </summary>
+    Task<bool> ClaimServerAsync(string serverName, ReadOnlyMemory<char> adminPassword, string initialAdminToken, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates the Admin Password. The server invalidates the token used for this request,
+    /// so <paramref name="newAuthenticationToken"/> is set as the current token on success.
+    /// </summary>
+    Task<bool> SetAdminPasswordAsync(ReadOnlyMemory<char> password, string newAuthenticationToken, CancellationToken cancellationToken = default);
+
+    // --- Server state ---
+
+    /// <summary>
+    /// Checks if the server is reachable: a UDP poll first, then an HTTPS health check as fallback.
+    /// </summary>
+    Task<bool> GetIsServerOnlineAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Retrieves the current server state with a single UDP poll. Returns null if no response arrives.
+    /// </summary>
+    Task<FactoryServerStateUdpResponse?> GetServerStateAsync(CancellationToken cancellationToken = default);
+
+    Task<FactoryServerResponseContent<QueryServerStateData>> QueryServerStateAsync(CancellationToken cancellationToken = default);
+
+    Task<FactoryServerResponseContent<GetServerOptionsData>> GetServerOptionsAsync(CancellationToken cancellationToken = default);
+
+    Task<FactoryServerResponseContent<GetAdvancedGameSettingsData>> GetAdvancedGameSettingsAsync(CancellationToken cancellationToken = default);
+
+    // --- Admin functions (guarded) ---
+
+    Task<FactoryServerError?> ApplyAdvancedGameSettingsAsync(Dictionary<string, string> appliedAdvancedGameSettings, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerError?> RenameServerAsync(string serverName, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerError?> SetClientPasswordAsync(ReadOnlyMemory<char>? password, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerError?> SetAutoLoadSessionNameAsync(string sessionName, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerResponseContent<RunCommandData>> RunCommandAsync(string command, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerError?> ShutdownAsync(CancellationToken cancellationToken = default);
+
+    Task<FactoryServerError?> ApplyServerOptionsAsync(Dictionary<string, string> updatedServerOptions, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerError?> CreateNewGameAsync(ServerNewGameData newGameData, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerError?> SaveGameAsync(string saveName, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerError?> DeleteSaveFileAsync(string saveName, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerError?> DeleteSaveSessionAsync(string sessionName, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerResponseContent<EnumerateSessionsData>> EnumerateSessionsAsync(CancellationToken cancellationToken = default);
+
+    Task<FactoryServerError?> LoadGameAsync(string saveName, bool enableAdvancedGameSettings, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerError?> UploadSaveGameAsync(string saveName, bool loadSaveGame, bool enableAdvancedGameSettings, Stream saveGameFile, CancellationToken cancellationToken = default);
+
+    Task<FactoryServerResponseContent<DownloadSaveGameData>> DownloadSaveGameAsync(string saveName, CancellationToken cancellationToken = default);
+}
+
+internal class FactoryServerClient : IFactoryServerClient
+{
+    private static readonly TimeSpan DefaultUdpTimeout = TimeSpan.FromSeconds(5);
+
+    private readonly IFactoryServerHttpClient _http;
+    private readonly IFactoryServerUdpClient _udp;
+    private ReadOnlyMemory<char>? _adminPassword;
+    private volatile bool _isClaimed;
+    private volatile FactoryServerStateUdpResponse? _currentServerState;
+
+    public FactoryServerPrivilegeLevel CurrentPrivilegeLevel => AuthenticationTokenHelper.GetTokenLevel(_http.AuthenticationToken?.AsMemory());
+
+    public bool IsClaimed => _isClaimed;
+
+    public FactoryServerStateUdpResponse? CurrentServerState => _currentServerState;
+
+    public event EventHandler<FactoryServerStateUdpResponse>? ServerStateReceived;
+    public event EventHandler<Exception>? ErrorOccurred;
+
+    internal FactoryServerClient(IFactoryServerHttpClient httpClient, IFactoryServerUdpClient udpClient)
+    {
+        _http = httpClient;
+        _udp = udpClient;
+        _udp.ServerStateReceived += Udp_ServerStateReceived;
+        _udp.ErrorOccurred += Udp_ErrorOccurred;
+    }
+
+    // --- Authentication ---
+
+    public async Task<bool> AdministratorLoginAsync(ReadOnlyMemory<char> password, CancellationToken cancellationToken = default)
+    {
+        FactoryServerResponseContent<LoginData> result = await _http.PasswordLoginAsync(FactoryServerPrivilegeLevel.Administrator, password, cancellationToken);
+        if (result.Data is null)
+            return false;
+
+        _adminPassword = password;
+        await _http.SetAuthenticationTokenAsync(result.Data.AuthenticationToken, cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> ClaimServerAsync(string serverName, ReadOnlyMemory<char> adminPassword, string initialAdminToken, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(initialAdminToken);
+        await _http.SetAuthenticationTokenAsync(initialAdminToken, cancellationToken);
+
+        FactoryServerResponseContent<LoginData> claimResult = await _http.ClaimServerAsync(serverName, adminPassword, cancellationToken);
+        if (claimResult.Data is null)
+            return false; // the claim failed
+
+        // The server issues a new token: the InitialAdmin privilege must be dropped in favor of it.
+        _adminPassword = adminPassword;
+        _isClaimed = true;
+        await _http.SetAuthenticationTokenAsync(claimResult.Data.AuthenticationToken, cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> SetAdminPasswordAsync(ReadOnlyMemory<char> password, string newAuthenticationToken, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? error = await _http.SetAdminPasswordAsync(password, newAuthenticationToken, cancellationToken);
+        if (error is not null)
+            return false;
+
+        // The token used for this request was invalidated by the server.
+        _adminPassword = password;
+        await _http.SetAuthenticationTokenAsync(newAuthenticationToken, cancellationToken);
+        return true;
+    }
+
+    public async Task<FactoryServerClaimCheck> CheckClaimStateAsync(CancellationToken cancellationToken = default)
+    {
+        if (_isClaimed)
+            return new FactoryServerClaimCheck(Unclaimed: false, InitialAdminToken: null);
+
+        // A passwordless InitialAdmin login is only possible while the server is
+        // not claimed.
+        FactoryServerResponseContent<LoginData> result = await _http.PasswordlessLoginAsync(FactoryServerPrivilegeLevel.InitialAdmin, cancellationToken);
+        if (!result.IsSuccess)
+        {
+            if (result.Error.ErrorCode == "passwordless_login_not_possible")
+            {
+                // Claimed by someone else
+                _isClaimed = true;
+                return new FactoryServerClaimCheck(Unclaimed: false, InitialAdminToken: null);
+            }
+
+            throw new InvalidOperationException($"Failed to check if the server is claimed. Error: {result.Error.ErrorCode} - {result.Error.ErrorMessage}");
+        }
+
+        return new FactoryServerClaimCheck(Unclaimed: true, InitialAdminToken: result.Data.AuthenticationToken);
+    }
+
+    public Task StartPollingAsync(CancellationToken cancellationToken = default)
+        => _udp.StartPollingAsync(cancellationToken: cancellationToken);
+
+    public Task StopPollingAsync()
+        => _udp.StopPollingAsync();
+
+    private void Udp_ServerStateReceived(object? sender, FactoryServerStateUdpResponse response)
+    {
+        _currentServerState = response;
+        ServerStateReceived?.Invoke(this, response);
+    }
+
+    private void Udp_ErrorOccurred(object? sender, Exception ex) => ErrorOccurred?.Invoke(this, ex);
+
+    // --- Server state ---
+
+    public async Task<bool> GetIsServerOnlineAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        if (await TryReceiveUdpStateAsync(timeout, cancellationToken) is not null)
+            return true;
+
+        // UDP is unreachable (or the server is starting up): fall back to the HTTPS health check.
+        using CancellationTokenSource timeoutCts = new(timeout);
+        using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        try
+        {
+            FactoryServerResponseContent<HealthCheckData> health = await _http.HealthCheckAsync(null, linked.Token);
+            return health.Error is null;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    public Task<FactoryServerStateUdpResponse?> GetServerStateAsync(CancellationToken cancellationToken = default)
+        => TryReceiveUdpStateAsync(DefaultUdpTimeout, cancellationToken);
+
+    public Task<FactoryServerResponseContent<QueryServerStateData>> QueryServerStateAsync(CancellationToken cancellationToken = default)
+        => _http.QueryServerStateAsync(cancellationToken);
+
+    public Task<FactoryServerResponseContent<GetServerOptionsData>> GetServerOptionsAsync(CancellationToken cancellationToken = default)
+        => _http.GetServerOptionsAsync(cancellationToken);
+
+    public Task<FactoryServerResponseContent<GetAdvancedGameSettingsData>> GetAdvancedGameSettingsAsync(CancellationToken cancellationToken = default)
+        => _http.GetAdvancedGameSettingsAsync(cancellationToken);
+
+    // --- Admin functions (guarded) ---
+
+    public async Task<FactoryServerError?> ApplyAdvancedGameSettingsAsync(Dictionary<string, string> appliedAdvancedGameSettings, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.ApplyAdvancedGameSettingsAsync(appliedAdvancedGameSettings, cancellationToken);
+    }
+
+    public async Task<FactoryServerError?> RenameServerAsync(string serverName, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.RenameServerAsync(serverName, cancellationToken);
+    }
+
+    public async Task<FactoryServerError?> SetClientPasswordAsync(ReadOnlyMemory<char>? password, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.SetClientPasswordAsync(password, cancellationToken);
+    }
+
+    public async Task<FactoryServerError?> SetAutoLoadSessionNameAsync(string sessionName, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.SetAutoLoadSessionNameAsync(sessionName, cancellationToken);
+    }
+
+    public async Task<FactoryServerResponseContent<RunCommandData>> RunCommandAsync(string command, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return new FactoryServerResponseContent<RunCommandData>(null, authError);
+
+        return await _http.RunCommandAsync(command, cancellationToken);
+    }
+
+    public async Task<FactoryServerError?> ShutdownAsync(CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.ShutdownAsync(cancellationToken);
+    }
+
+    public async Task<FactoryServerError?> ApplyServerOptionsAsync(Dictionary<string, string> updatedServerOptions, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.ApplyServerOptions(updatedServerOptions, cancellationToken);
+    }
+
+    public async Task<FactoryServerError?> CreateNewGameAsync(ServerNewGameData newGameData, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.CreateNewGameAsync(newGameData, cancellationToken);
+    }
+
+    public async Task<FactoryServerError?> SaveGameAsync(string saveName, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.SaveGameAsync(saveName, cancellationToken);
+    }
+
+    public async Task<FactoryServerError?> DeleteSaveFileAsync(string saveName, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.DeleteSaveFileAsync(saveName, cancellationToken);
+    }
+
+    public async Task<FactoryServerError?> DeleteSaveSessionAsync(string sessionName, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.DeleteSaveSessionAsync(sessionName, cancellationToken);
+    }
+
+    public async Task<FactoryServerResponseContent<EnumerateSessionsData>> EnumerateSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return new FactoryServerResponseContent<EnumerateSessionsData>(null, authError);
+
+        return await _http.EnumerateSessionsAsync(cancellationToken);
+    }
+
+    public async Task<FactoryServerError?> LoadGameAsync(string saveName, bool enableAdvancedGameSettings, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.LoadGameAsync(saveName, enableAdvancedGameSettings, cancellationToken);
+    }
+
+    public async Task<FactoryServerError?> UploadSaveGameAsync(string saveName, bool loadSaveGame, bool enableAdvancedGameSettings, Stream saveGameFile, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return authError;
+
+        return await _http.UploadSaveGameAsync(saveName, loadSaveGame, enableAdvancedGameSettings, saveGameFile, cancellationToken);
+    }
+
+    public async Task<FactoryServerResponseContent<DownloadSaveGameData>> DownloadSaveGameAsync(string saveName, CancellationToken cancellationToken = default)
+    {
+        FactoryServerError? authError = await EnsureAdminAsync(cancellationToken);
+        if (authError is not null)
+            return new FactoryServerResponseContent<DownloadSaveGameData>(null, authError);
+
+        return await _http.DownloadSaveGameAsync(saveName, cancellationToken);
+    }
+
+    // --- Helpers ---
+
+    /// <summary>
+    /// Ensures the current token has Administrator (or API token) privileges.
+    /// If not, attempts to re-login with the last admin password used.
+    /// Returns null on success, a synthetic error otherwise.
+    /// </summary>
+    private async Task<FactoryServerError?> EnsureAdminAsync(CancellationToken cancellationToken)
+    {
+        if (CurrentPrivilegeLevel is FactoryServerPrivilegeLevel.Administrator or FactoryServerPrivilegeLevel.APIToken)
+            return null;
+
+        if (_adminPassword is not null && await AdministratorLoginAsync(_adminPassword.Value, cancellationToken))
+            return null;
+
+        return new FactoryServerError
+        {
+            ErrorCode = "not_authenticated",
+            ErrorMessage = "Administrator authentication is required."
+        };
+    }
+
+    private async Task<FactoryServerStateUdpResponse?> TryReceiveUdpStateAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        try
+        {
+            Task<FactoryServerStateUdpResponse> receiveTask = _udp.ReceiveMessageAsync(timeout, cancellationToken);
+            await _udp.SendPollingMessageAsync(cancellationToken: cancellationToken);
+            return await receiveTask;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (SocketException)
+        {
+            return null;
+        }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
+    }
+
+    public void Dispose()
+    {
+        _udp.ServerStateReceived -= Udp_ServerStateReceived;
+        _udp.ErrorOccurred -= Udp_ErrorOccurred;
+        _udp.Dispose();
+
+        // Wipe the secrets held in memory: the last admin password used and
+        // the current authentication token (held by the HTTP client).
+        _adminPassword = null;
+        _http.Dispose();
+    }
 }

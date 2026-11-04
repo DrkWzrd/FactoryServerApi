@@ -366,3 +366,6 @@ FodyWeavers.xsd
 /ServerExample/Program.cs
 /Example2/Example2.csproj
 /Example2/Program.cs
+
+# Local test server credentials (contains passwords - never commit)
+TEST_SERVER_CREDENTIALS.txt

@@ -1,9 +1,19 @@
-﻿namespace FactoryServerApi;
+
+namespace FactoryServerApi;
 
 public class HttpOptions
 {
-    public TimeSpan ConnectionTimeout { get; init; }
-    public string UserAgentAppName { get; init; } = default!;
-    public Version? UserAgentAppVersion { get; init; }
-    public string ApiPath { get; init; } = default!;
+    private static readonly Version AssemblyMajorMinor = GetAssemblyMajorMinor();
+
+    public string UserAgentAppName { get; } = "SatisfactoryApiClient";
+    public Version UserAgentAppVersion { get; } = AssemblyMajorMinor;
+
+    public TimeSpan ConnectionTimeout { get; set; } = TimeSpan.FromSeconds(30);
+    public string ApiPath { get; set; } = "api/v1/";
+
+    private static Version GetAssemblyMajorMinor()
+    {
+        Version? v = typeof(HttpOptions).Assembly.GetName().Version;
+        return v is null ? new Version(0, 0) : new Version(v.Major, v.Minor);
+    }
 }
